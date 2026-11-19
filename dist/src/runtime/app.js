@@ -1141,10 +1141,10 @@ isOut
 }
 function renderAboutSection() {
 return `
-<section id="tentang-kami" class="py-20 bg-white border-t border-[#633D25]/10"><div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"><div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center"><!-- Visual Collage --><div class="lg:col-span-5 space-y-4"><div class="relative rounded-3xl overflow-hidden shadow-xl border-4 border-[#FFF5DF]"><img
-src="https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=900&q=80"
-alt="Proses Produksi Keripik Pisang Salee"
-class="w-full h-72 object-cover"
+<section id="tentang-kami" class="py-20 bg-white border-t border-[#633D25]/10"><div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8"><div class="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center"><!-- Visual Collage --><div class="lg:col-span-5 space-y-4"><div class="relative rounded-3xl overflow-hidden aspect-[4/3] shadow-xl border-4 border-[#FFF5DF] bg-[#FFF5DF]"><img
+src="./assets/images/tentang-kebun-pisang-salee.jpg"
+alt="Perkebunan Pisang Kepok Tropis Keripik Pisang Salee"
+class="w-full h-full object-cover object-[center_30%]"
 /><div class="absolute bottom-4 left-4 right-4 p-4 rounded-2xl bg-[#633D25]/90 backdrop-blur-md text-white"><div class="text-xs font-bold text-[#F5C84C] uppercase">Warisan Rasa Nusantara</div><div class="text-sm font-semibold mt-0.5">Kemitraan langsung bersama 45+ petani pisang kepok lokal Lampung & Jawa Barat.</div></div></div><div class="grid grid-cols-2 gap-4"><div class="p-5 rounded-3xl bg-[#FFF5DF] border border-[#F5C84C]/50"><div class="text-2xl font-extrabold text-[#633D25]">100% Alami</div><p class="text-xs text-[#633D25]/75 mt-1">Tanpa pemanis buatan, tanpa pengawet, dan bebas MSG berlebih.</p></div><div class="p-5 rounded-3xl bg-[#557447] text-white"><div class="text-2xl font-extrabold text-[#F5C84C]">Higienis</div><p class="text-xs text-white/85 mt-1">Menggunakan mesin spinner peniris minyak modern sehingga keripik kering & renyah.</p></div></div></div><!-- Story & Production Process --><div class="lg:col-span-7 space-y-6"><span class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#F5C84C]/30 text-[#633D25] text-xs font-extrabold"><i data-lucide="sprout" class="w-4 h-4 text-[#557447]"></i> TENTANG KERIPIK PISANG SALEE
 </span><h2 class="font-display text-3xl sm:text-4xl font-extrabold text-[#633D25] leading-tight">
 Dari Kebun Tropis Pilihan Menuju Camilan Kelas Premium
