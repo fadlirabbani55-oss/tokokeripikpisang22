@@ -356,7 +356,7 @@ created_at: now,
 }
 }
 });
-state.db.payments.unshift({
+const newPayment = {
 id: `pay-${Date.now()}`,
 order_id: orderId,
 payment_method: paymentMethod,
@@ -367,7 +367,8 @@ status: deductImmediately ? 'Verified' : 'Pending',
 paid_at: deductImmediately ? now : null,
 verified_by: null,
 created_at: now,
-});
+};
+state.db.payments.unshift(newPayment);
 state.cart = [];
 state.checkoutOpen = false;
 state.orderSuccessData = {
@@ -381,35 +382,37 @@ shippingAddress,
 items: summary.items,
 };
 persistAll();
-showToast(`Pesanan ${orderNumber} berhasil dibuat!`);
+showToast(`Pesanan ${orderNumber} berhasil dibuat! Menyimpan ke Supabase...`);
 renderApp();
+if (window.SaleeDB && typeof window.SaleeDB.syncCheckoutToSupabase === 'function') {
+window.SaleeDB.syncCheckoutToSupabase({
+customer,
+order: newOrder,
+items: summary.items,
+payment: newPayment,
+}).then((res) => {
+if (res && res.ok) {
+showToast(`Pesanan ${orderNumber} tersimpan di Supabase (orders & order_items)!`, 'success');
+} else {
+console.warn('Supabase checkout sync warning:', res && res.error);
+showToast(
+`Pesanan tersimpan lokal. Gagal sinkron ke Supabase: ${(res && res.error) || 'Periksa tabel & RLS Supabase'}`,
+'warning'
+);
+}
+});
+}
 }
 function openSkipOrSwitchToAdmin() {
-if (state.currentUser && state.currentUser.role === 'admin') {
+if (state.currentUser && state.currentUser.role === 'admin' && state.currentUser.supabaseVerified) {
 state.viewMode = 'admin';
 window.scrollTo({ top: 0, behavior: 'smooth' });
 renderApp();
 } else {
 state.authModalOpen = true;
-state.authMode = 'login';
+state.authMode = 'admin';
 renderApp();
 }
-}
-function loginAsDemoAdmin() {
-const adminUser = state.db.users.find((u) => u.role === 'admin') || {
-id: 'usr-admin-01',
-email: 'admin@pisangsalee.id',
-full_name: 'Budi Santoso (Owner Salee)',
-phone: '081234567890',
-role: 'admin',
-};
-state.currentUser = adminUser;
-state.authModalOpen = false;
-state.viewMode = 'admin';
-persistAll();
-showToast(`Selamat datang kembali, ${adminUser.full_name}!`);
-window.scrollTo({ top: 0, behavior: 'smooth' });
-renderApp();
 }
 function loginAsDemoCustomer() {
 const custUser = state.db.users.find((u) => u.role === 'customer') || {
@@ -429,36 +432,61 @@ function handleAuthSubmit(e) {
 e.preventDefault();
 const form = e.target;
 const email = form.email.value.trim();
-const roleSelect = form.role ? form.role.value : 'admin';
 const fullName = form.fullName ? form.fullName.value.trim() : '';
 if (!email) {
 showToast('Masukkan alamat email.', 'error');
 return;
 }
-let user = state.db.users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+let user = state.db.users.find(
+(u) => u.email.toLowerCase() === email.toLowerCase() && u.role === 'customer'
+);
 if (!user) {
 user = {
 id: `usr-${Date.now()}`,
 email,
-full_name: fullName || (roleSelect === 'admin' ? 'Owner Keripik Pisang Salee' : email.split('@')[0]),
+full_name: fullName || email.split('@')[0],
 phone: '081234567890',
-role: roleSelect,
+role: 'customer',
 created_at: new Date().toISOString(),
 };
 state.db.users.push(user);
 }
-state.currentUser = user;
+state.currentUser = { ...user, role: 'customer', supabaseVerified: false };
 state.authModalOpen = false;
-if (user.role === 'admin') {
-state.viewMode = 'admin';
-}
+state.viewMode = 'store';
 persistAll();
-showToast(`Berhasil masuk sebagai ${user.full_name} (${user.role.toUpperCase()})`);
+showToast(`Berhasil masuk sebagai pelanggan: ${user.full_name}`);
+renderApp();
+}
+async function handleAdminAuthSubmit(e) {
+e.preventDefault();
+const form = e.target;
+const email = form.email.value.trim();
+const password = form.password ? form.password.value : '';
+if (!email || !password) {
+showToast('Masukkan email dan password akun Admin.', 'error');
+return;
+}
+showToast('Memverifikasi hak akses Admin melalui Supabase...');
+const res = await window.SaleeDB.verifyOwnerAdminViaSupabase(email, password);
+if (!res || !res.ok) {
+showToast((res && res.error) || 'Akses Admin ditolak oleh Supabase.', 'error');
+return;
+}
+state.currentUser = res.user;
+state.authModalOpen = false;
+state.viewMode = 'admin';
+persistAll();
+showToast(`Verifikasi Supabase berhasil! Selamat datang, ${res.user.full_name}.`);
+window.scrollTo({ top: 0, behavior: 'smooth' });
 renderApp();
 }
 function handleLogout() {
 state.currentUser = null;
 state.viewMode = 'store';
+if (window.SaleeDB && typeof window.SaleeDB.signOutSupabase === 'function') {
+window.SaleeDB.signOutSupabase();
+}
 persistAll();
 showToast('Anda telah keluar dari sesi akun.', 'info');
 renderApp();
@@ -1413,39 +1441,66 @@ Selesai & Lanjut Belanja
 }
 function renderAuthModal() {
 if (!state.authModalOpen) return '';
+const isAdminTab = state.authMode === 'admin';
 return `
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"><div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border-2 border-[#633D25]/15"><div class="px-6 py-4 bg-[#633D25] text-white flex items-center justify-between"><div class="flex items-center gap-2"><i data-lucide="lock" class="w-5 h-5 text-[#F5C84C]"></i><h3 class="font-display font-extrabold text-lg">Akses Akun & Demo RBAC</h3></div><button
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"><div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border-2 border-[#633D25]/15"><div class="px-6 py-4 bg-[#633D25] text-white flex items-center justify-between"><div class="flex items-center gap-2"><i data-lucide="lock" class="w-5 h-5 text-[#F5C84C]"></i><h3 class="font-display font-extrabold text-lg">${isAdminTab ? 'Login Admin (Verifikasi Supabase)' : 'Masuk / Daftar Pelanggan'}</h3></div><button
 type="button"
 onclick="window.SaleeApp.closeAuthModal()"
 class="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
-><i data-lucide="x" class="w-5 h-5"></i></button></div><div class="p-6 space-y-5"><!-- Instant 1-Click Demo Buttons --><div class="p-4 rounded-2xl bg-[#FFF5DF] border border-[#F5C84C] space-y-2.5"><div class="text-xs font-extrabold text-[#633D25] uppercase tracking-wider">Login Cepat Mode Demo:</div><div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"><button
+><i data-lucide="x" class="w-5 h-5"></i></button></div><div class="p-6 space-y-5"><!-- Tab Switcher: Pelanggan vs Admin --><div class="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-[#FFF5DF] border border-[#633D25]/15"><button
 type="button"
-onclick="window.SaleeApp.loginDemoAdmin()"
-class="py-2.5 px-3 rounded-xl bg-[#633D25] hover:bg-[#4e2f1c] text-[#F5C84C] font-extrabold text-xs flex items-center justify-center gap-1.5 shadow cursor-pointer"
-><i data-lucide="shield" class="w-4 h-4"></i><span>Masuk Admin UMKM</span></button><button
+onclick="window.SaleeApp.setAuthMode('login')"
+class="py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${!isAdminTab ? 'bg-[#633D25] text-[#F5C84C] shadow' : 'text-[#633D25]'}"
+>Akun Pelanggan</button><button
 type="button"
-onclick="window.SaleeApp.loginDemoCustomer()"
-class="py-2.5 px-3 rounded-xl bg-[#557447] hover:bg-[#445e38] text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow cursor-pointer"
-><i data-lucide="user" class="w-4 h-4"></i><span>Masuk Pelanggan</span></button></div></div><!-- Form Manual --><form onsubmit="window.SaleeApp.submitAuth(event)" class="space-y-3.5"><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Nama Lengkap</label><input
-type="text"
-name="fullName"
-placeholder="Contoh: Budi Santoso"
-class="w-full px-4 py-2.5 rounded-xl bg-[#FFF5DF]/50 border border-[#633D25]/20 text-sm"
-/></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Email *</label><input
+onclick="window.SaleeApp.setAuthMode('admin')"
+class="py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${isAdminTab ? 'bg-[#633D25] text-[#F5C84C] shadow' : 'text-[#633D25]'}"
+>Akses Owner / Admin</button></div>
+${
+isAdminTab
+? `
+<form onsubmit="window.SaleeApp.submitAdminAuth(event)" class="space-y-3.5"><div class="p-3.5 rounded-2xl bg-[#FFF5DF] border border-[#F5C84C] text-xs text-[#633D25] font-medium">Akses Dashboard Admin hanya tersedia untuk akun Owner resmi dan diverifikasi langsung melalui <strong>Supabase Auth</strong>.</div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Email Akun *</label><input
 type="email"
 name="email"
 required
-value="admin@pisangsalee.id"
+placeholder="Masukkan email akun"
+autocomplete="email"
 class="w-full px-4 py-2.5 rounded-xl bg-[#FFF5DF]/50 border border-[#633D25]/20 text-sm"
-/></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Role Akses</label><select
-name="role"
-class="w-full px-4 py-2.5 rounded-xl bg-[#FFF5DF]/50 border border-[#633D25]/20 text-sm font-bold text-[#633D25]"
-><option value="admin">Admin / Pemilik Usaha (Full Dashboard Access)</option><option value="customer">Pelanggan (Customer Storefront)</option></select></div><button
+/></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Password *</label><input
+type="password"
+name="password"
+required
+placeholder="Masukkan password"
+autocomplete="current-password"
+class="w-full px-4 py-2.5 rounded-xl bg-[#FFF5DF]/50 border border-[#633D25]/20 text-sm"
+/></div><button
 type="submit"
-class="w-full py-3 rounded-2xl bg-[#633D25] text-white font-extrabold text-sm cursor-pointer"
->
-Masuk Sekarang
-</button></form></div></div></div>
+class="w-full py-3 rounded-2xl bg-[#633D25] hover:bg-[#4e2f1c] text-white font-extrabold text-sm cursor-pointer"
+>Verifikasi & Masuk Dashboard</button></form>
+`
+: `
+<div class="p-4 rounded-2xl bg-[#FFF5DF] border border-[#F5C84C] space-y-2.5"><div class="text-xs font-extrabold text-[#633D25] uppercase tracking-wider">Login Cepat Pelanggan:</div><button
+type="button"
+onclick="window.SaleeApp.loginDemoCustomer()"
+class="w-full py-2.5 px-3 rounded-xl bg-[#557447] hover:bg-[#445e38] text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow cursor-pointer"
+><i data-lucide="user" class="w-4 h-4"></i><span>Masuk sebagai Pelanggan Demo</span></button></div><form onsubmit="window.SaleeApp.submitAuth(event)" class="space-y-3.5"><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Nama Lengkap</label><input
+type="text"
+name="fullName"
+placeholder="Contoh: Nadia Putri"
+class="w-full px-4 py-2.5 rounded-xl bg-[#FFF5DF]/50 border border-[#633D25]/20 text-sm"
+/></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Email Pelanggan *</label><input
+type="email"
+name="email"
+required
+placeholder="nama@email.com"
+class="w-full px-4 py-2.5 rounded-xl bg-[#FFF5DF]/50 border border-[#633D25]/20 text-sm"
+/></div><button
+type="submit"
+class="w-full py-3 rounded-2xl bg-[#633D25] hover:bg-[#4e2f1c] text-white font-extrabold text-sm cursor-pointer"
+>Masuk / Daftar Pelanggan</button></form>
+`
+}
+</div></div></div>
 `;
 }
 function getAdminStats() {
@@ -2317,21 +2372,25 @@ closeAuthModal: function () {
 state.authModalOpen = false;
 renderApp();
 },
-loginDemoAdmin: loginAsDemoAdmin,
 loginDemoCustomer: loginAsDemoCustomer,
 submitAuth: handleAuthSubmit,
+submitAdminAuth: handleAdminAuthSubmit,
+setAuthMode: function (mode) {
+state.authMode = mode;
+renderApp();
+},
 logout: handleLogout,
-openAdmin: function () {
-if (!state.currentUser || state.currentUser.role !== 'admin') {
-state.currentUser = state.db.users.find((u) => u.role === 'admin') || {
-id: 'usr-admin-01',
-email: 'admin@pisangsalee.id',
-full_name: 'Budi Santoso (Owner Salee)',
-phone: '081234567890',
-role: 'admin',
-};
-persistAll();
-showToast('Masuk otomatis ke Dashboard Admin (Mode Demo Owner).');
+openAdmin: async function () {
+const isVerified =
+window.SaleeDB && typeof window.SaleeDB.checkCurrentAdminSession === 'function'
+? await window.SaleeDB.checkCurrentAdminSession()
+: false;
+if (!isVerified) {
+state.authMode = 'admin';
+state.authModalOpen = true;
+renderApp();
+showToast('Silakan login dengan akun Owner terverifikasi Supabase untuk membuka Dashboard Admin.', 'warning');
+return;
 }
 state.viewMode = 'admin';
 window.scrollTo({ top: 0, behavior: 'smooth' });

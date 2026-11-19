@@ -588,6 +588,188 @@
       console.warn(err);
     }
   }
+  async function syncCheckoutToSupabase(payload) {
+    if (!supabaseClient) {
+      return { ok: false, error: 'Klien Supabase belum terinisialisasi.' };
+    }
+    try {
+      const { customer, order, items, payment } = payload;
+
+      // 1. Cari atau buat data pembeli di tabel customers
+      let sbCustomerId = null;
+      const { data: existingCust } = await supabaseClient
+        .from('customers')
+        .select('id')
+        .eq('whatsapp', customer.whatsapp)
+        .limit(1);
+
+      if (existingCust && existingCust.length > 0) {
+        sbCustomerId = existingCust[0].id;
+      } else {
+        const { data: insertedCust, error: custErr } = await supabaseClient
+          .from('customers')
+          .insert({
+            name: customer.name,
+            whatsapp: customer.whatsapp,
+            email: customer.email || null,
+            address: customer.address,
+            city: customer.city || null,
+            total_orders: customer.total_orders || 1,
+            total_spent: customer.total_spent || order.total_amount,
+            last_order_at: order.created_at,
+          })
+          .select('id')
+          .single();
+
+        if (custErr) {
+          return { ok: false, error: 'customers: ' + custErr.message };
+        }
+        sbCustomerId = insertedCust.id;
+      }
+
+      // 2. Simpan pesanan utama ke tabel orders
+      const { data: insertedOrder, error: orderErr } = await supabaseClient
+        .from('orders')
+        .insert({
+          order_number: order.order_number,
+          customer_id: sbCustomerId,
+          customer_name: order.customer_name,
+          customer_whatsapp: order.customer_whatsapp,
+          shipping_address: order.shipping_address,
+          notes: order.notes || null,
+          subtotal: order.subtotal,
+          shipping_cost: order.shipping_cost,
+          discount_amount: order.discount_amount || 0,
+          total_amount: order.total_amount,
+          payment_method: order.payment_method,
+          status: order.status,
+          stock_deducted: Boolean(order.stock_deducted),
+        })
+        .select('id, order_number')
+        .single();
+
+      if (orderErr) {
+        return { ok: false, error: 'orders: ' + orderErr.message };
+      }
+
+      // 3. Cocokkan SKU produk dengan UUID di tabel products Supabase (jika sudah di-seed)
+      const skuToUuid = {};
+      const skus = items.map((i) => i.product && i.product.sku).filter(Boolean);
+      if (skus.length > 0) {
+        const { data: sbProds } = await supabaseClient
+          .from('products')
+          .select('id, sku')
+          .in('sku', skus);
+        if (Array.isArray(sbProds)) {
+          sbProds.forEach((sp) => {
+            skuToUuid[sp.sku] = sp.id;
+          });
+        }
+      }
+
+      // 4. Simpan seluruh daftar produk yang dibeli ke tabel order_items
+      const orderItemsRows = items.map((item) => ({
+        order_id: insertedOrder.id,
+        product_id: (item.product && skuToUuid[item.product.sku]) || null,
+        product_name: item.product ? item.product.name : item.product_name,
+        product_image: item.product ? item.product.image_url : item.product_image || null,
+        unit_price: item.product ? item.product.price : item.unit_price,
+        quantity: item.quantity,
+        subtotal: item.subtotal,
+      }));
+
+      const { error: itemsErr } = await supabaseClient
+        .from('order_items')
+        .insert(orderItemsRows);
+
+      if (itemsErr) {
+        return { ok: false, error: 'order_items: ' + itemsErr.message };
+      }
+
+      // 5. Simpan data pembayaran ke tabel payments (opsional / non-blocking)
+      if (payment) {
+        await supabaseClient.from('payments').insert({
+          order_id: insertedOrder.id,
+          payment_method: payment.payment_method,
+          bank_name: payment.bank_name || null,
+          account_sender: payment.account_sender || order.customer_name,
+          amount: payment.amount,
+          status: payment.status || 'Pending',
+          paid_at: payment.paid_at || null,
+        });
+      }
+
+      return { ok: true, orderId: insertedOrder.id, orderNumber: insertedOrder.order_number };
+    } catch (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    }
+  }
+  async function verifyOwnerAdminViaSupabase(email, password) {
+    if (!supabaseClient) {
+      return { ok: false, error: 'Klien Supabase belum terinisialisasi.' };
+    }
+    try {
+      const { data: authData, error: authErr } = await supabaseClient.auth.signInWithPassword({
+        email: String(email || '').trim(),
+        password: String(password || ''),
+      });
+      if (authErr || !authData || !authData.user) {
+        return {
+          ok: false,
+          error: (authErr && authErr.message) || 'Email atau password tidak valid.',
+        };
+      }
+      const { data: isOwnerAdmin, error: rpcErr } = await supabaseClient.rpc('verify_owner_admin');
+      if (rpcErr) {
+        await supabaseClient.auth.signOut();
+        return {
+          ok: false,
+          error: 'Verifikasi admin gagal di Supabase: ' + rpcErr.message,
+        };
+      }
+      if (!isOwnerAdmin) {
+        await supabaseClient.auth.signOut();
+        return {
+          ok: false,
+          error: 'Akses ditolak. Akun ini tidak memiliki hak akses Admin.',
+        };
+      }
+      return {
+        ok: true,
+        user: {
+          id: authData.user.id,
+          email: authData.user.email,
+          full_name:
+            (authData.user.user_metadata && authData.user.user_metadata.full_name) ||
+            'Owner Keripik Pisang Salee',
+          phone: (authData.user.user_metadata && authData.user.user_metadata.phone) || '',
+          role: 'admin',
+          supabaseVerified: true,
+        },
+      };
+    } catch (err) {
+      return { ok: false, error: err && err.message ? err.message : String(err) };
+    }
+  }
+  async function checkCurrentAdminSession() {
+    if (!supabaseClient) return false;
+    try {
+      const { data: sessionData } = await supabaseClient.auth.getSession();
+      if (!sessionData || !sessionData.session) return false;
+      const { data: isOwnerAdmin, error } = await supabaseClient.rpc('verify_owner_admin');
+      return !error && isOwnerAdmin === true;
+    } catch {
+      return false;
+    }
+  }
+  async function signOutSupabase() {
+    if (!supabaseClient) return;
+    try {
+      await supabaseClient.auth.signOut();
+    } catch (err) {
+      console.warn('Supabase signOut warning:', err);
+    }
+  }
   window.SaleeDB = {
     STORAGE_KEY,
     DEFAULT_SUPABASE_URL,
@@ -601,6 +783,10 @@
     saveCart,
     loadAuthUser,
     saveAuthUser,
+    syncCheckoutToSupabase,
+    verifyOwnerAdminViaSupabase,
+    checkCurrentAdminSession,
+    signOutSupabase,
     resetToSeed: function () {
       const fresh = cloneSeed();
       saveDB(fresh);

@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
 CREATE TABLE IF NOT EXISTS public.order_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_id UUID NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
-  product_id UUID NOT NULL REFERENCES public.products(id) ON DELETE RESTRICT,
+  product_id UUID REFERENCES public.products(id) ON DELETE SET NULL,
   product_name TEXT NOT NULL,
   product_image TEXT,
   unit_price NUMERIC(12, 2) NOT NULL CHECK (unit_price >= 0),
@@ -154,16 +154,102 @@ ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.stock_movements ENABLE ROW LEVEL SECURITY;
--- Helper function untuk mengecek apakah user saat ini adalah Admin
+-- ============================================================================
+-- KONFIGURASI KEAMANAN OWNER ADMIN TUNGGAL & VERIFIKASI SUPABASE
+-- ============================================================================
+-- Helper function untuk mengecek apakah user terautentikasi saat ini adalah Owner Admin
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
+DECLARE
+  v_email TEXT;
 BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM public.users
-    WHERE id = auth.uid() AND role IN ('admin', 'staff')
+  SELECT LOWER(au.email)
+  INTO v_email
+  FROM auth.users au
+  WHERE au.id = auth.uid();
+
+  IF v_email IS NULL THEN
+    RETURN FALSE;
+  END IF;
+
+  RETURN (
+    v_email = 'fadlirabbani55@gmail.com'
+    AND EXISTS (
+      SELECT 1 FROM public.users u
+      WHERE u.id = auth.uid()
+        AND LOWER(u.email) = 'fadlirabbani55@gmail.com'
+        AND u.role = 'admin'
+    )
   );
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+-- RPC aman untuk memverifikasi hak akses Owner Admin dari aplikasi
+CREATE OR REPLACE FUNCTION public.verify_owner_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN public.is_admin();
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+GRANT EXECUTE ON FUNCTION public.verify_owner_admin() TO authenticated;
+
+-- Trigger 1: Mencegah eskalasi role menjadi admin untuk akun selain Owner
+CREATE OR REPLACE FUNCTION public.enforce_single_owner_admin()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF LOWER(NEW.email) = 'fadlirabbani55@gmail.com' THEN
+    NEW.role := 'admin';
+  ELSE
+    NEW.role := 'customer';
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+DROP TRIGGER IF EXISTS trg_enforce_single_owner_admin ON public.users;
+CREATE TRIGGER trg_enforce_single_owner_admin
+  BEFORE INSERT OR UPDATE ON public.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.enforce_single_owner_admin();
+
+-- Trigger 2: Otomatis sinkronisasi user baru dari auth.users ke public.users
+-- Pengguna yang mendaftar sendiri selalu mendapatkan role 'customer'
+CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO public.users (id, email, full_name, role)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
+    CASE
+      WHEN LOWER(NEW.email) = 'fadlirabbani55@gmail.com' THEN 'admin'
+      ELSE 'customer'
+    END
+  )
+  ON CONFLICT (id) DO UPDATE
+  SET email = EXCLUDED.email,
+      role = CASE
+        WHEN LOWER(EXCLUDED.email) = 'fadlirabbani55@gmail.com' THEN 'admin'
+        ELSE 'customer'
+      END,
+      updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, auth;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_new_auth_user();
+
+-- Policies untuk tabel users (Hanya user sendiri yang bisa melihat profilnya, Owner Admin bisa melihat semua)
+CREATE POLICY "User lihat profil sendiri atau admin" ON public.users
+  FOR SELECT USING (auth.uid() = id OR public.is_admin());
+CREATE POLICY "User update profil sendiri tanpa ubah role" ON public.users
+  FOR UPDATE USING (auth.uid() = id OR public.is_admin());
 -- Policies untuk categories & products (Publik bisa baca, hanya Admin yang bisa tulis)
 CREATE POLICY "Categories dapat dilihat publik" ON public.categories FOR SELECT USING (true);
 CREATE POLICY "Admin kelola categories" ON public.categories FOR ALL USING (public.is_admin());
