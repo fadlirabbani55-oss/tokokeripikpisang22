@@ -325,7 +325,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         weight_grams: Number(productInput.weight_grams) || 200,
         image_url:
           productInput.image_url ||
-          'https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=900&q=80',
+          './assets/images/salee-klasik-gurih.jpg',
         is_popular: Boolean(productInput.is_popular),
         is_active: productInput.is_active ?? true,
         rating: 4.9,

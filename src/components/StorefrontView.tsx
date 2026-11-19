@@ -133,9 +133,9 @@ export const StorefrontView: React.FC<StorefrontProps> = ({ onOpenAdmin, onShowT
           </div>
           <div className="lg:col-span-5">
             <img
-              src="https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=1000&q=80"
+              src="./assets/images/salee-madu-karamel.jpg"
               alt="Keripik Pisang Salee"
-              className="w-full h-[420px] object-cover rounded-3xl shadow-2xl border-4 border-white"
+              className="w-full aspect-square object-cover rounded-3xl shadow-2xl border-4 border-white"
             />
           </div>
         </div>

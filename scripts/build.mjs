@@ -38,7 +38,17 @@ const runtimeDest = path.join(distDir, 'src', 'runtime');
 copyDirRecursive(runtimeSrc, runtimeDest);
 console.log('✓ Copied src/runtime/* -> dist/src/runtime/*');
 
-// 4. Copy supabase/schema.sql to dist/supabase/schema.sql
+// 4. Copy assets/images/* to dist/assets/images/* and dist/images/*
+const assetsSrc = path.join(rootDir, 'assets');
+const assetsDest = path.join(distDir, 'assets');
+copyDirRecursive(assetsSrc, assetsDest);
+console.log('✓ Copied assets/* -> dist/assets/*');
+
+const publicSrc = path.join(rootDir, 'public');
+copyDirRecursive(publicSrc, distDir);
+console.log('✓ Copied public/* -> dist/*');
+
+// 5. Copy supabase/schema.sql to dist/supabase/schema.sql
 const supabaseSrc = path.join(rootDir, 'supabase');
 const supabaseDest = path.join(distDir, 'supabase');
 copyDirRecursive(supabaseSrc, supabaseDest);

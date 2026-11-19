@@ -104,7 +104,7 @@
         stock: 48,
         min_stock: 15,
         weight_grams: 200,
-        image_url: 'https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=900&q=80',
+        image_url: './assets/images/salee-klasik-gurih.jpg',
         is_popular: true,
         is_active: true,
         rating: 4.9,
@@ -123,7 +123,7 @@
         stock: 36,
         min_stock: 15,
         weight_grams: 220,
-        image_url: 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=900&q=80',
+        image_url: './assets/images/salee-madu-karamel.jpg',
         is_popular: true,
         is_active: true,
         rating: 5.0,
@@ -142,7 +142,7 @@
         stock: 8,
         min_stock: 15,
         weight_grams: 250,
-        image_url: 'https://images.unsplash.com/photo-1606312619070-d48b4c652a52?auto=format&fit=crop&w=900&q=80',
+        image_url: './assets/images/salee-choco-melt.jpg',
         is_popular: true,
         is_active: true,
         rating: 4.9,
@@ -161,7 +161,7 @@
         stock: 29,
         min_stock: 12,
         weight_grams: 250,
-        image_url: 'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=900&q=80',
+        image_url: './assets/images/salee-matcha-uji.jpg',
         is_popular: true,
         is_active: true,
         rating: 4.8,
@@ -180,7 +180,7 @@
         stock: 42,
         min_stock: 15,
         weight_grams: 200,
-        image_url: 'https://images.unsplash.com/photo-1587132137056-bfbf0166836e?auto=format&fit=crop&w=900&q=80',
+        image_url: './assets/images/salee-gula-aren.jpg',
         is_popular: false,
         is_active: true,
         rating: 4.8,
@@ -199,7 +199,7 @@
         stock: 6,
         min_stock: 12,
         weight_grams: 250,
-        image_url: 'https://images.unsplash.com/photo-1548907040-4baa42d10919?auto=format&fit=crop&w=900&q=80',
+        image_url: './assets/images/salee-tiramisu-espresso.jpg',
         is_popular: true,
         is_active: true,
         rating: 4.9,
@@ -218,7 +218,7 @@
         stock: 31,
         min_stock: 12,
         weight_grams: 220,
-        image_url: 'https://images.unsplash.com/photo-1599490659213-e2b9527bd087?auto=format&fit=crop&w=900&q=80',
+        image_url: './assets/images/salee-keju-cheddar.jpg',
         is_popular: false,
         is_active: true,
         rating: 4.8,
@@ -237,7 +237,7 @@
         stock: 24,
         min_stock: 10,
         weight_grams: 200,
-        image_url: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?auto=format&fit=crop&w=900&q=80',
+        image_url: './assets/images/salee-bawang-daun-jeruk.jpg',
         is_popular: false,
         is_active: true,
         rating: 4.7,
@@ -441,25 +441,25 @@
       },
     ],
     order_items: [
-      { id: 'oi-01', order_id: 'ord-01', product_id: 'prd-02', product_name: 'Salee Madu Karamel Panggang', product_image: 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=900&q=80', unit_price: 22000, quantity: 3, subtotal: 66000, created_at: '2026-11-12T10:15:00Z' },
-      { id: 'oi-02', order_id: 'ord-01', product_id: 'prd-04', product_name: 'Salee Matcha Uji Glaze', product_image: 'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=900&q=80', unit_price: 27000, quantity: 2, subtotal: 54000, created_at: '2026-11-12T10:15:00Z' },
-      { id: 'oi-03', order_id: 'ord-02', product_id: 'prd-03', product_name: 'Salee Choco Melt Belgia', product_image: 'https://images.unsplash.com/photo-1606312619070-d48b4c652a52?auto=format&fit=crop&w=900&q=80', unit_price: 26000, quantity: 4, subtotal: 104000, created_at: '2026-11-14T16:05:00Z' },
-      { id: 'oi-04', order_id: 'ord-02', product_id: 'prd-01', product_name: 'Salee Klasik Gurih Mentega', product_image: 'https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=900&q=80', unit_price: 18000, quantity: 2, subtotal: 36000, created_at: '2026-11-14T16:05:00Z' },
-      { id: 'oi-05', order_id: 'ord-03', product_id: 'prd-02', product_name: 'Salee Madu Karamel Panggang', product_image: 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=900&q=80', unit_price: 22000, quantity: 4, subtotal: 88000, created_at: '2026-11-15T13:40:00Z' },
-      { id: 'oi-06', order_id: 'ord-03', product_id: 'prd-06', product_name: 'Salee Tiramisu Espresso Crunch', product_image: 'https://images.unsplash.com/photo-1548907040-4baa42d10919?auto=format&fit=crop&w=900&q=80', unit_price: 28000, quantity: 2, subtotal: 56000, created_at: '2026-11-15T13:40:00Z' },
-      { id: 'oi-07', order_id: 'ord-03', product_id: 'prd-08', product_name: 'Salee Bawang Daun Jeruk Wangi', product_image: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?auto=format&fit=crop&w=900&q=80', unit_price: 19000, quantity: 2, subtotal: 38000, created_at: '2026-11-15T13:40:00Z' },
-      { id: 'oi-08', order_id: 'ord-04', product_id: 'prd-03', product_name: 'Salee Choco Melt Belgia', product_image: 'https://images.unsplash.com/photo-1606312619070-d48b4c652a52?auto=format&fit=crop&w=900&q=80', unit_price: 26000, quantity: 3, subtotal: 78000, created_at: '2026-11-16T14:20:00Z' },
-      { id: 'oi-09', order_id: 'ord-04', product_id: 'prd-05', product_name: 'Salee Gula Aren Asap Tradisional', product_image: 'https://images.unsplash.com/photo-1587132137056-bfbf0166836e?auto=format&fit=crop&w=900&q=80', unit_price: 20000, quantity: 3, subtotal: 60000, created_at: '2026-11-16T14:20:00Z' },
-      { id: 'oi-10', order_id: 'ord-04', product_id: 'prd-07', product_name: 'Salee Keju Cheddar Susu Lumer', product_image: 'https://images.unsplash.com/photo-1599490659213-e2b9527bd087?auto=format&fit=crop&w=900&q=80', unit_price: 25000, quantity: 2, subtotal: 50000, created_at: '2026-11-16T14:20:00Z' },
-      { id: 'oi-11', order_id: 'ord-05', product_id: 'prd-03', product_name: 'Salee Choco Melt Belgia', product_image: 'https://images.unsplash.com/photo-1606312619070-d48b4c652a52?auto=format&fit=crop&w=900&q=80', unit_price: 26000, quantity: 3, subtotal: 78000, created_at: '2026-11-17T14:20:00Z' },
-      { id: 'oi-12', order_id: 'ord-05', product_id: 'prd-01', product_name: 'Salee Klasik Gurih Mentega', product_image: 'https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=900&q=80', unit_price: 18000, quantity: 2, subtotal: 36000, created_at: '2026-11-17T14:20:00Z' },
-      { id: 'oi-13', order_id: 'ord-05', product_id: 'prd-06', product_name: 'Salee Tiramisu Espresso Crunch', product_image: 'https://images.unsplash.com/photo-1548907040-4baa42d10919?auto=format&fit=crop&w=900&q=80', unit_price: 28000, quantity: 1, subtotal: 28000, created_at: '2026-11-17T14:20:00Z' },
-      { id: 'oi-14', order_id: 'ord-06', product_id: 'prd-02', product_name: 'Salee Madu Karamel Panggang', product_image: 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=900&q=80', unit_price: 22000, quantity: 2, subtotal: 44000, created_at: '2026-11-18T08:45:00Z' },
-      { id: 'oi-15', order_id: 'ord-06', product_id: 'prd-04', product_name: 'Salee Matcha Uji Glaze', product_image: 'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=900&q=80', unit_price: 27000, quantity: 1, subtotal: 27000, created_at: '2026-11-18T08:45:00Z' },
-      { id: 'oi-16', order_id: 'ord-06', product_id: 'prd-01', product_name: 'Salee Klasik Gurih Mentega', product_image: 'https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=900&q=80', unit_price: 18000, quantity: 2, subtotal: 36000, created_at: '2026-11-18T08:45:00Z' },
-      { id: 'oi-17', order_id: 'ord-07', product_id: 'prd-04', product_name: 'Salee Matcha Uji Glaze', product_image: 'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=900&q=80', unit_price: 27000, quantity: 2, subtotal: 54000, created_at: '2026-11-18T09:30:00Z' },
-      { id: 'oi-18', order_id: 'ord-07', product_id: 'prd-06', product_name: 'Salee Tiramisu Espresso Crunch', product_image: 'https://images.unsplash.com/photo-1548907040-4baa42d10919?auto=format&fit=crop&w=900&q=80', unit_price: 28000, quantity: 1, subtotal: 28000, created_at: '2026-11-18T09:30:00Z' },
-      { id: 'oi-19', order_id: 'ord-07', product_id: 'prd-07', product_name: 'Salee Keju Cheddar Susu Lumer', product_image: 'https://images.unsplash.com/photo-1599490659213-e2b9527bd087?auto=format&fit=crop&w=900&q=80', unit_price: 25000, quantity: 1, subtotal: 25000, created_at: '2026-11-18T09:30:00Z' },
+      { id: 'oi-01', order_id: 'ord-01', product_id: 'prd-02', product_name: 'Salee Madu Karamel Panggang', product_image: './assets/images/salee-madu-karamel.jpg', unit_price: 22000, quantity: 3, subtotal: 66000, created_at: '2026-11-12T10:15:00Z' },
+      { id: 'oi-02', order_id: 'ord-01', product_id: 'prd-04', product_name: 'Salee Matcha Uji Glaze', product_image: './assets/images/salee-matcha-uji.jpg', unit_price: 27000, quantity: 2, subtotal: 54000, created_at: '2026-11-12T10:15:00Z' },
+      { id: 'oi-03', order_id: 'ord-02', product_id: 'prd-03', product_name: 'Salee Choco Melt Belgia', product_image: './assets/images/salee-choco-melt.jpg', unit_price: 26000, quantity: 4, subtotal: 104000, created_at: '2026-11-14T16:05:00Z' },
+      { id: 'oi-04', order_id: 'ord-02', product_id: 'prd-01', product_name: 'Salee Klasik Gurih Mentega', product_image: './assets/images/salee-klasik-gurih.jpg', unit_price: 18000, quantity: 2, subtotal: 36000, created_at: '2026-11-14T16:05:00Z' },
+      { id: 'oi-05', order_id: 'ord-03', product_id: 'prd-02', product_name: 'Salee Madu Karamel Panggang', product_image: './assets/images/salee-madu-karamel.jpg', unit_price: 22000, quantity: 4, subtotal: 88000, created_at: '2026-11-15T13:40:00Z' },
+      { id: 'oi-06', order_id: 'ord-03', product_id: 'prd-06', product_name: 'Salee Tiramisu Espresso Crunch', product_image: './assets/images/salee-tiramisu-espresso.jpg', unit_price: 28000, quantity: 2, subtotal: 56000, created_at: '2026-11-15T13:40:00Z' },
+      { id: 'oi-07', order_id: 'ord-03', product_id: 'prd-08', product_name: 'Salee Bawang Daun Jeruk Wangi', product_image: './assets/images/salee-bawang-daun-jeruk.jpg', unit_price: 19000, quantity: 2, subtotal: 38000, created_at: '2026-11-15T13:40:00Z' },
+      { id: 'oi-08', order_id: 'ord-04', product_id: 'prd-03', product_name: 'Salee Choco Melt Belgia', product_image: './assets/images/salee-choco-melt.jpg', unit_price: 26000, quantity: 3, subtotal: 78000, created_at: '2026-11-16T14:20:00Z' },
+      { id: 'oi-09', order_id: 'ord-04', product_id: 'prd-05', product_name: 'Salee Gula Aren Asap Tradisional', product_image: './assets/images/salee-gula-aren.jpg', unit_price: 20000, quantity: 3, subtotal: 60000, created_at: '2026-11-16T14:20:00Z' },
+      { id: 'oi-10', order_id: 'ord-04', product_id: 'prd-07', product_name: 'Salee Keju Cheddar Susu Lumer', product_image: './assets/images/salee-keju-cheddar.jpg', unit_price: 25000, quantity: 2, subtotal: 50000, created_at: '2026-11-16T14:20:00Z' },
+      { id: 'oi-11', order_id: 'ord-05', product_id: 'prd-03', product_name: 'Salee Choco Melt Belgia', product_image: './assets/images/salee-choco-melt.jpg', unit_price: 26000, quantity: 3, subtotal: 78000, created_at: '2026-11-17T14:20:00Z' },
+      { id: 'oi-12', order_id: 'ord-05', product_id: 'prd-01', product_name: 'Salee Klasik Gurih Mentega', product_image: './assets/images/salee-klasik-gurih.jpg', unit_price: 18000, quantity: 2, subtotal: 36000, created_at: '2026-11-17T14:20:00Z' },
+      { id: 'oi-13', order_id: 'ord-05', product_id: 'prd-06', product_name: 'Salee Tiramisu Espresso Crunch', product_image: './assets/images/salee-tiramisu-espresso.jpg', unit_price: 28000, quantity: 1, subtotal: 28000, created_at: '2026-11-17T14:20:00Z' },
+      { id: 'oi-14', order_id: 'ord-06', product_id: 'prd-02', product_name: 'Salee Madu Karamel Panggang', product_image: './assets/images/salee-madu-karamel.jpg', unit_price: 22000, quantity: 2, subtotal: 44000, created_at: '2026-11-18T08:45:00Z' },
+      { id: 'oi-15', order_id: 'ord-06', product_id: 'prd-04', product_name: 'Salee Matcha Uji Glaze', product_image: './assets/images/salee-matcha-uji.jpg', unit_price: 27000, quantity: 1, subtotal: 27000, created_at: '2026-11-18T08:45:00Z' },
+      { id: 'oi-16', order_id: 'ord-06', product_id: 'prd-01', product_name: 'Salee Klasik Gurih Mentega', product_image: './assets/images/salee-klasik-gurih.jpg', unit_price: 18000, quantity: 2, subtotal: 36000, created_at: '2026-11-18T08:45:00Z' },
+      { id: 'oi-17', order_id: 'ord-07', product_id: 'prd-04', product_name: 'Salee Matcha Uji Glaze', product_image: './assets/images/salee-matcha-uji.jpg', unit_price: 27000, quantity: 2, subtotal: 54000, created_at: '2026-11-18T09:30:00Z' },
+      { id: 'oi-18', order_id: 'ord-07', product_id: 'prd-06', product_name: 'Salee Tiramisu Espresso Crunch', product_image: './assets/images/salee-tiramisu-espresso.jpg', unit_price: 28000, quantity: 1, subtotal: 28000, created_at: '2026-11-18T09:30:00Z' },
+      { id: 'oi-19', order_id: 'ord-07', product_id: 'prd-07', product_name: 'Salee Keju Cheddar Susu Lumer', product_image: './assets/images/salee-keju-cheddar.jpg', unit_price: 25000, quantity: 1, subtotal: 25000, created_at: '2026-11-18T09:30:00Z' },
     ],
     payments: [
       { id: 'pay-01', order_id: 'ord-01', payment_method: 'Transfer Bank', bank_name: 'Bank BCA', account_sender: 'Nadia Putri M', amount: 132000, status: 'Verified', paid_at: '2026-11-12T10:30:00Z', verified_by: 'usr-admin-01', created_at: '2026-11-12T10:15:00Z' },
@@ -498,6 +498,16 @@
       cod_enabled: true,
     },
   };
+  const PRODUCT_IMAGE_MAP = {
+    'prd-01': './assets/images/salee-klasik-gurih.jpg',
+    'prd-02': './assets/images/salee-madu-karamel.jpg',
+    'prd-03': './assets/images/salee-choco-melt.jpg',
+    'prd-04': './assets/images/salee-matcha-uji.jpg',
+    'prd-05': './assets/images/salee-gula-aren.jpg',
+    'prd-06': './assets/images/salee-tiramisu-espresso.jpg',
+    'prd-07': './assets/images/salee-keju-cheddar.jpg',
+    'prd-08': './assets/images/salee-bawang-daun-jeruk.jpg',
+  };
   function cloneSeed() {
     return JSON.parse(JSON.stringify(SEED_DB));
   }
@@ -507,6 +517,27 @@
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.products) && Array.isArray(parsed.orders)) {
+          let migrated = false;
+          parsed.products.forEach((p) => {
+            if (PRODUCT_IMAGE_MAP[p.id] && (!p.image_url || p.image_url.includes('unsplash.com'))) {
+              p.image_url = PRODUCT_IMAGE_MAP[p.id];
+              migrated = true;
+            }
+          });
+          if (Array.isArray(parsed.order_items)) {
+            parsed.order_items.forEach((oi) => {
+              if (
+                PRODUCT_IMAGE_MAP[oi.product_id] &&
+                (!oi.product_image || oi.product_image.includes('unsplash.com'))
+              ) {
+                oi.product_image = PRODUCT_IMAGE_MAP[oi.product_id];
+                migrated = true;
+              }
+            });
+          }
+          if (migrated) {
+            saveDB(parsed);
+          }
           return parsed;
         }
       }

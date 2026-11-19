@@ -36,14 +36,14 @@ reportEndDate: '2026-11-30',
 sqlModalOpen: false,
 };
 const PRESET_PRODUCT_PHOTOS = [
-{ label: 'Pisang Salee Klasik', url: 'https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=900&q=80' },
-{ label: 'Pisang Karamel Madu', url: 'https://images.unsplash.com/photo-1528825871115-3581a5387919?auto=format&fit=crop&w=900&q=80' },
-{ label: 'Choco Melt Belgia', url: 'https://images.unsplash.com/photo-1606312619070-d48b4c652a52?auto=format&fit=crop&w=900&q=80' },
-{ label: 'Matcha Uji Glaze', url: 'https://images.unsplash.com/photo-1515823064-d6e0c04616a7?auto=format&fit=crop&w=900&q=80' },
-{ label: 'Gula Aren Tradisional', url: 'https://images.unsplash.com/photo-1587132137056-bfbf0166836e?auto=format&fit=crop&w=900&q=80' },
-{ label: 'Tiramisu Crunch', url: 'https://images.unsplash.com/photo-1548907040-4baa42d10919?auto=format&fit=crop&w=900&q=80' },
-{ label: 'Keju Cheddar Susu', url: 'https://images.unsplash.com/photo-1599490659213-e2b9527bd087?auto=format&fit=crop&w=900&q=80' },
-{ label: 'Daun Jeruk Gurih', url: 'https://images.unsplash.com/photo-1566478989037-eec170784d0b?auto=format&fit=crop&w=900&q=80' },
+{ label: 'Pisang Salee Klasik', url: './assets/images/salee-klasik-gurih.jpg' },
+{ label: 'Pisang Karamel Madu', url: './assets/images/salee-madu-karamel.jpg' },
+{ label: 'Choco Melt Belgia', url: './assets/images/salee-choco-melt.jpg' },
+{ label: 'Matcha Uji Glaze', url: './assets/images/salee-matcha-uji.jpg' },
+{ label: 'Gula Aren Tradisional', url: './assets/images/salee-gula-aren.jpg' },
+{ label: 'Tiramisu Crunch', url: './assets/images/salee-tiramisu-espresso.jpg' },
+{ label: 'Keju Cheddar Susu', url: './assets/images/salee-keju-cheddar.jpg' },
+{ label: 'Daun Jeruk Gurih', url: './assets/images/salee-bawang-daun-jeruk.jpg' },
 ];
 function formatRp(num) {
 const n = Number(num) || 0;
@@ -958,9 +958,9 @@ class="inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-[#633D25] hover:b
 ><i data-lucide="shopping-bag" class="w-5 h-5 text-[#F5C84C]"></i><span>Belanja Sekarang</span></a><a
 href="#tentang-kami"
 class="inline-flex items-center gap-2.5 px-7 py-4 rounded-2xl bg-white hover:bg-[#F5C84C]/25 text-[#633D25] border-2 border-[#633D25]/20 font-extrabold text-sm sm:text-base transition-all hover:-translate-y-0.5"
-><span>Kenali Produk Kami</span><i data-lucide="arrow-right" class="w-4 h-4 text-[#557447]"></i></a></div><!-- Trust Metrics --><div class="pt-6 grid grid-cols-3 gap-4 border-t border-[#633D25]/15 max-w-lg mx-auto lg:mx-0"><div class="bg-white/70 backdrop-blur-sm p-3.5 rounded-2xl border border-[#633D25]/10"><div class="text-xl sm:text-2xl font-extrabold text-[#633D25]">2.300+</div><div class="text-xs font-semibold text-[#557447]">Pouch Terjual</div></div><div class="bg-white/70 backdrop-blur-sm p-3.5 rounded-2xl border border-[#633D25]/10"><div class="text-xl sm:text-2xl font-extrabold text-[#633D25]">4.9 / 5.0</div><div class="text-xs font-semibold text-[#557447]">Rating Pelanggan</div></div><div class="bg-white/70 backdrop-blur-sm p-3.5 rounded-2xl border border-[#633D25]/10"><div class="text-xl sm:text-2xl font-extrabold text-[#633D25]">100%</div><div class="text-xs font-semibold text-[#557447]">Fresh Setiap Hari</div></div></div></div><!-- Right Column: Large Hero Product Visual --><div class="lg:col-span-5"><div class="relative mx-auto max-w-lg"><div class="absolute -inset-3 rounded-[36px] bg-gradient-to-tr from-[#F5C84C] via-[#557447]/40 to-[#633D25]/30 blur-xl opacity-70"></div><div class="relative bg-white rounded-[32px] p-4 shadow-2xl border-4 border-white"><div class="relative rounded-3xl overflow-hidden aspect-[4/3] bg-[#FFF5DF]"><img
-src="https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=1000&q=85"
-alt="Keripik Pisang Salee Kualitas Premium"
+><span>Kenali Produk Kami</span><i data-lucide="arrow-right" class="w-4 h-4 text-[#557447]"></i></a></div><!-- Trust Metrics --><div class="pt-6 grid grid-cols-3 gap-4 border-t border-[#633D25]/15 max-w-lg mx-auto lg:mx-0"><div class="bg-white/70 backdrop-blur-sm p-3.5 rounded-2xl border border-[#633D25]/10"><div class="text-xl sm:text-2xl font-extrabold text-[#633D25]">2.300+</div><div class="text-xs font-semibold text-[#557447]">Pouch Terjual</div></div><div class="bg-white/70 backdrop-blur-sm p-3.5 rounded-2xl border border-[#633D25]/10"><div class="text-xl sm:text-2xl font-extrabold text-[#633D25]">4.9 / 5.0</div><div class="text-xs font-semibold text-[#557447]">Rating Pelanggan</div></div><div class="bg-white/70 backdrop-blur-sm p-3.5 rounded-2xl border border-[#633D25]/10"><div class="text-xl sm:text-2xl font-extrabold text-[#633D25]">100%</div><div class="text-xs font-semibold text-[#557447]">Fresh Setiap Hari</div></div></div></div><!-- Right Column: Large Hero Product Visual --><div class="lg:col-span-5"><div class="relative mx-auto max-w-lg"><div class="absolute -inset-3 rounded-[36px] bg-gradient-to-tr from-[#F5C84C] via-[#557447]/40 to-[#633D25]/30 blur-xl opacity-70"></div><div class="relative bg-white rounded-[32px] p-4 shadow-2xl border-4 border-white"><div class="relative rounded-3xl overflow-hidden aspect-square bg-[#FFF5DF]"><img
+src="./assets/images/salee-madu-karamel.jpg"
+alt="Salee Madu Karamel & Choco Melt"
 class="w-full h-full object-cover hover:scale-105 transition-transform duration-700"
 /><div class="absolute inset-0 bg-gradient-to-t from-[#633D25]/80 via-transparent to-transparent"></div><div class="absolute top-4 left-4"><span class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#F5C84C] text-[#633D25] text-xs font-extrabold shadow-md"><i data-lucide="award" class="w-3.5 h-3.5"></i> Best Seller UMKM
 </span></div><div class="absolute bottom-4 left-4 right-4 text-white flex items-end justify-between"><div><p class="text-xs uppercase tracking-wider text-[#F5C84C] font-bold">Varian Terfavorit</p><h3 class="text-lg font-extrabold">Salee Madu Karamel & Choco Melt</h3></div><span class="px-3 py-1.5 rounded-xl bg-white text-[#633D25] font-extrabold text-sm shadow">
@@ -1084,11 +1084,11 @@ const cat = getCategoryById(product.category_id);
 const isOut = product.stock <= 0;
 const isLow = product.stock > 0 && product.stock <= product.min_stock;
 return `
-<div class="bg-white rounded-3xl overflow-hidden border border-[#633D25]/10 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group hover:-translate-y-1.5"><!-- Image Wrapper --><div class="relative aspect-[4/3] bg-[#FFF5DF] overflow-hidden"><img
+<div class="bg-white rounded-3xl overflow-hidden border border-[#633D25]/10 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group hover:-translate-y-1.5"><!-- Image Wrapper --><div class="relative aspect-square bg-[#FFF5DF] overflow-hidden"><img
 src="${escapeHtml(product.image_url)}"
 alt="${escapeHtml(product.name)}"
 class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-onerror="this.src='https://images.unsplash.com/photo-1603833665858-e61d17a86224?auto=format&fit=crop&w=900&q=80'"
+onerror="this.src='./assets/images/salee-klasik-gurih.jpg'"
 /><!-- Top Badges --><div class="absolute top-3 left-3 flex flex-wrap gap-1.5">
 ${
 product.is_popular
