@@ -496,6 +496,22 @@
       free_shipping_threshold: 150000,
       default_min_stock: 12,
       cod_enabled: true,
+      shipping_rates: {
+        'Lampung': 10000,
+        'DKI Jakarta': 15000,
+        'Banten': 15000,
+        'Jawa Barat': 15000,
+        'Jawa Tengah': 18000,
+        'DI Yogyakarta': 18000,
+        'Jawa Timur': 20000,
+        'Sumatera Selatan': 14000,
+        'Bengkulu': 16000,
+        'Jambi': 18000,
+        'Riau': 20000,
+        'Sumatera Barat': 20000,
+        'Sumatera Utara': 22000,
+        'Bali': 25000,
+      },
     },
   };
   const PRODUCT_IMAGE_MAP = {
@@ -535,6 +551,10 @@
               }
             });
           }
+          if (parsed.settings && !parsed.settings.shipping_rates) {
+            parsed.settings.shipping_rates = JSON.parse(JSON.stringify(SEED_DB.settings.shipping_rates));
+            migrated = true;
+          }
           if (migrated) {
             saveDB(parsed);
           }
@@ -551,8 +571,10 @@
   function saveDB(db) {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+      return true;
     } catch (err) {
       console.error('Gagal menyimpan DB ke localStorage:', err);
+      return false;
     }
   }
   function loadCart() {

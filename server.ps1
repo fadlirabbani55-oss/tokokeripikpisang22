@@ -30,7 +30,7 @@ try {
     $response = $context.Response
 
     $localPath = $request.Url.LocalPath.TrimStart('/')
-    if ([string]::IsNullOrWhiteSpace($localPath)) {
+    if ([string]::IsNullOrWhiteSpace($localPath) -or $localPath -eq 'owner-login' -or $localPath -eq 'admin' -or $localPath.StartsWith('admin/')) {
       $localPath = "index.html"
     }
 

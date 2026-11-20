@@ -3,7 +3,7 @@ const state = {
 db: window.SaleeDB.loadDB(),
 cart: window.SaleeDB.loadCart(),
 currentUser: window.SaleeDB.loadAuthUser(),
-viewMode: 'store', // 'store' | 'admin'
+viewMode: 'store', // 'store' | 'owner-login' | 'admin'
 adminTab: 'dashboard', // 'dashboard' | 'products' | 'categories' | 'stock' | 'orders' | 'customers' | 'reports' | 'settings'
 mobileMenuOpen: false,
 adminSidebarOpen: false,
@@ -14,9 +14,26 @@ cartDrawerOpen: false,
 detailProductId: null,
 detailQty: 1,
 checkoutOpen: false,
-orderSuccessData: null, // { orderNumber, orderId, totalAmount, paymentMethod, customerName, customerWhatsapp }
+isSubmittingOrder: false,
+checkoutForm: {
+customerName: '',
+customerWhatsapp: '',
+province: '',
+city: '',
+district: '',
+village: '',
+streetAddress: '',
+postalCode: '',
+notes: '',
+paymentMethod: 'Transfer Bank',
+},
+orderSuccessData: null,
+customerOrderDetailId: null,
 authModalOpen: false,
 authMode: 'login', // 'login' | 'register'
+showOwnerPassword: false,
+adminLoginLoading: false,
+adminLoginError: '',
 chartPeriod: 'daily', // 'daily' | 'monthly'
 adminProductSearch: '',
 adminProductCatFilter: 'ALL',
@@ -35,6 +52,15 @@ reportStartDate: '2026-11-01',
 reportEndDate: '2026-11-30',
 sqlModalOpen: false,
 };
+const INDONESIA_PROVINCES = [
+'Aceh', 'Sumatera Utara', 'Sumatera Barat', 'Riau', 'Kepulauan Riau', 'Jambi',
+'Sumatera Selatan', 'Bengkulu', 'Lampung', 'Kepulauan Bangka Belitung',
+'DKI Jakarta', 'Banten', 'Jawa Barat', 'Jawa Tengah', 'DI Yogyakarta', 'Jawa Timur',
+'Bali', 'Nusa Tenggara Barat', 'Nusa Tenggara Timur',
+'Kalimantan Barat', 'Kalimantan Tengah', 'Kalimantan Selatan', 'Kalimantan Timur', 'Kalimantan Utara',
+'Sulawesi Utara', 'Sulawesi Tengah', 'Sulawesi Selatan', 'Sulawesi Tenggara', 'Gorontalo', 'Sulawesi Barat',
+'Maluku', 'Maluku Utara', 'Papua', 'Papua Barat', 'Papua Tengah', 'Papua Pegunungan', 'Papua Selatan', 'Papua Barat Daya',
+];
 const PRESET_PRODUCT_PHOTOS = [
 { label: 'Pisang Salee Klasik', url: './assets/images/salee-klasik-gurih.jpg' },
 { label: 'Pisang Karamel Madu', url: './assets/images/salee-madu-karamel.jpg' },
@@ -92,6 +118,41 @@ badge_color: '#F5C84C',
 function getProductById(prodId) {
 return state.db.products.find((p) => p.id === prodId) || null;
 }
+function getShippingInfo(province, subtotal) {
+const freeThreshold = Number(state.db.settings.free_shipping_threshold) || 150000;
+const rates = (state.db.settings && state.db.settings.shipping_rates) || {};
+if (!province) {
+return {
+status: 'unselected',
+cost: 0,
+label: 'Pilih provinsi tujuan',
+freeThreshold,
+};
+}
+if (Object.prototype.hasOwnProperty.call(rates, province)) {
+const rate = Number(rates[province]) || 0;
+if (subtotal >= freeThreshold && subtotal > 0) {
+return {
+status: 'free',
+cost: 0,
+label: 'GRATIS',
+freeThreshold,
+};
+}
+return {
+status: 'calculated',
+cost: rate,
+label: formatRp(rate),
+freeThreshold,
+};
+}
+return {
+status: 'unavailable',
+cost: 0,
+label: 'Tarif belum tersedia (Konfirmasi Admin)',
+freeThreshold,
+};
+}
 function getCartSummary() {
 const items = [];
 let totalQty = 0;
@@ -111,24 +172,73 @@ subtotal: lineSubtotal,
 });
 }
 });
-const freeThreshold = Number(state.db.settings.free_shipping_threshold) || 150000;
-const defaultShip = Number(state.db.settings.default_shipping) || 12000;
-const shipping = items.length === 0 ? 0 : subtotal >= freeThreshold ? 0 : defaultShip;
-const total = subtotal + shipping;
+const shipInfo = getShippingInfo(state.checkoutForm ? state.checkoutForm.province : '', subtotal);
+const shipping = items.length === 0 ? 0 : shipInfo.cost;
+const discount = 0;
+const total = Math.max(0, subtotal + shipping - discount);
 return {
 items,
 totalQty,
 subtotal,
 shipping,
-freeThreshold,
-amountToFreeShipping: Math.max(0, freeThreshold - subtotal),
+shippingStatus: shipInfo.status,
+shippingLabel: items.length === 0 ? formatRp(0) : shipInfo.label,
+discount,
+freeThreshold: shipInfo.freeThreshold,
+amountToFreeShipping: Math.max(0, shipInfo.freeThreshold - subtotal),
 total,
 };
 }
 function persistAll() {
-window.SaleeDB.saveDB(state.db);
+const saved = window.SaleeDB.saveDB(state.db);
 window.SaleeDB.saveCart(state.cart);
 window.SaleeDB.saveAuthUser(state.currentUser);
+return saved !== false;
+}
+function navigateToRoute(path) {
+try {
+if (window.location.protocol.startsWith('http') && window.location.pathname !== path) {
+window.history.pushState({}, '', path);
+}
+} catch {
+// Ignore history pushState errors on file:// protocol
+}
+syncRouteFromLocation(path);
+}
+function syncRouteFromLocation(explicitPath) {
+const rawPath = explicitPath || (window.location && window.location.pathname) || '/';
+const cleanPath = rawPath.replace(/\/+$/, '') || '/';
+const isOwnerVerified =
+window.SaleeDB && typeof window.SaleeDB.checkLocalAdminSession === 'function'
+? window.SaleeDB.checkLocalAdminSession()
+: false;
+
+if (cleanPath === '/admin' || cleanPath.startsWith('/admin/')) {
+if (!isOwnerVerified) {
+state.viewMode = 'owner-login';
+try {
+if (window.location.protocol.startsWith('http')) {
+window.history.replaceState({}, '', '/owner-login');
+}
+} catch {}
+} else {
+state.viewMode = 'admin';
+}
+} else if (cleanPath === '/owner-login') {
+if (isOwnerVerified) {
+state.viewMode = 'admin';
+try {
+if (window.location.protocol.startsWith('http')) {
+window.history.replaceState({}, '', '/admin');
+}
+} catch {}
+} else {
+state.viewMode = 'owner-login';
+}
+} else {
+state.viewMode = 'store';
+}
+renderApp();
 }
 function showToast(message, type = 'success') {
 const container = document.getElementById('toastContainer');
@@ -234,73 +344,155 @@ if (summary.items.length === 0) {
 showToast('Keranjang belanja Anda masih kosong.', 'warning');
 return;
 }
+const isCustomerLoggedIn = state.currentUser && state.currentUser.role === 'customer';
+state.checkoutForm = {
+customerName: isCustomerLoggedIn ? (state.currentUser.full_name || '') : '',
+customerWhatsapp: isCustomerLoggedIn ? (state.currentUser.phone || '') : '',
+province: '',
+city: '',
+district: '',
+village: '',
+streetAddress: '',
+postalCode: '',
+notes: '',
+paymentMethod: 'Transfer Bank',
+};
+state.isSubmittingOrder = false;
 state.cartDrawerOpen = false;
 state.checkoutOpen = true;
 renderApp();
 }
+function updateCheckoutField(field, value, shouldRender = false) {
+if (!state.checkoutForm) state.checkoutForm = {};
+state.checkoutForm[field] = value;
+if (shouldRender) renderApp();
+}
+function copyBankAccount() {
+const acct = (state.db.settings && state.db.settings.bank_account) || '';
+if (!acct) return;
+if (navigator.clipboard && navigator.clipboard.writeText) {
+navigator.clipboard.writeText(acct).then(() => {
+showToast(`Nomor rekening ${acct} berhasil disalin!`);
+}).catch(() => {
+showToast(`Nomor rekening: ${acct}`, 'info');
+});
+} else {
+showToast(`Nomor rekening: ${acct}`, 'info');
+}
+}
 function handleCheckoutSubmit(event) {
 event.preventDefault();
+if (state.isSubmittingOrder) {
+showToast('Pesanan Anda sedang diproses, mohon tunggu sebentar...', 'warning');
+return;
+}
 const form = event.target;
-const customerName = form.customerName.value.trim();
-const customerWhatsapp = form.customerWhatsapp.value.trim();
-const shippingAddress = form.shippingAddress.value.trim();
-const notes = form.notes.value.trim();
-const paymentMethod = form.paymentMethod.value;
+const customerName = (form.customerName ? form.customerName.value : state.checkoutForm.customerName || '').trim();
+const customerWhatsapp = (form.customerWhatsapp ? form.customerWhatsapp.value : state.checkoutForm.customerWhatsapp || '').trim();
+const province = (form.province ? form.province.value : state.checkoutForm.province || '').trim();
+const city = (form.city ? form.city.value : state.checkoutForm.city || '').trim();
+const district = (form.district ? form.district.value : state.checkoutForm.district || '').trim();
+const village = (form.village ? form.village.value : state.checkoutForm.village || '').trim();
+const streetAddress = (form.streetAddress ? form.streetAddress.value : state.checkoutForm.streetAddress || '').trim();
+const postalCode = (form.postalCode ? form.postalCode.value : state.checkoutForm.postalCode || '').trim();
+const notes = (form.notes ? form.notes.value : state.checkoutForm.notes || '').trim();
+const paymentMethod = (form.paymentMethod ? form.paymentMethod.value : state.checkoutForm.paymentMethod || 'Transfer Bank');
+
+state.checkoutForm = {
+customerName, customerWhatsapp, province, city, district, village, streetAddress, postalCode, notes, paymentMethod,
+};
+
 if (customerName.length < 2) {
-showToast('Mohon isi nama lengkap penerima.', 'error');
+showToast('Mohon isi nama lengkap penerima (minimal 2 karakter).', 'error');
 return;
 }
-if (customerWhatsapp.replace(/\D/g, '').length < 9) {
-showToast('Mohon masukkan nomor WhatsApp yang valid (minimal 9 digit).', 'error');
+const digitsWA = customerWhatsapp.replace(/\D/g, '');
+if (!/^(08|628)[0-9]{8,13}$/.test(digitsWA)) {
+showToast('Format nomor WhatsApp tidak valid. Gunakan format 08... atau 628... (10-15 digit).', 'error');
 return;
 }
-if (shippingAddress.length < 8) {
-showToast('Mohon tulis alamat lengkap pengiriman beserta kecamatan/kota.', 'error');
+if (!province || !city || !district || !village || streetAddress.length < 5 || !/^[0-9]{5}$/.test(postalCode)) {
+showToast('Mohon lengkapi seluruh kolom alamat pengiriman (Provinsi, Kab/Kota, Kecamatan, Desa/Kelurahan, Jalan/No. Rumah, dan Kode Pos 5 digit).', 'error');
 return;
 }
+
 const summary = getCartSummary();
 if (summary.items.length === 0) {
-showToast('Keranjang kosong.', 'error');
+showToast('Keranjang belanja kosong. Tambahkan produk terlebih dahulu.', 'error');
 return;
 }
+
+// Validasi ulang harga & stok langsung dari database sebelum disimpan
+let verifiedSubtotal = 0;
+const verifiedItems = [];
 for (const item of summary.items) {
-if (item.product.stock < item.quantity) {
-showToast(`Stok ${item.product.name} tidak mencukupi (tersisa ${item.product.stock}).`, 'error');
+const dbProd = getProductById(item.product_id);
+if (!dbProd) {
+showToast(`Produk "${item.product.name}" tidak ditemukan di katalog.`, 'error');
 return;
 }
+if (dbProd.stock < item.quantity) {
+showToast(`Stok "${dbProd.name}" tidak mencukupi (tersisa ${dbProd.stock} pouch).`, 'error');
+return;
 }
+const lineSub = Number(dbProd.price) * Number(item.quantity);
+verifiedSubtotal += lineSub;
+verifiedItems.push({
+product_id: dbProd.id,
+quantity: item.quantity,
+product: dbProd,
+subtotal: lineSub,
+});
+}
+
+state.isSubmittingOrder = true;
+renderApp();
+
+const shipInfo = getShippingInfo(province, verifiedSubtotal);
+const verifiedShipping = shipInfo.cost;
+const verifiedTotal = verifiedSubtotal + verifiedShipping;
+const shippingAddress = `${streetAddress}, Desa/Kel. ${village}, Kec. ${district}, ${city}, ${province} ${postalCode}`;
+const addressDetail = { province, city, district, village, streetAddress, postalCode };
+
 const now = new Date().toISOString();
 const datePart = now.slice(2, 10).replace(/-/g, '');
+const randSuffix = String(Math.floor(100 + Math.random() * 900));
 const orderSeq = String(state.db.orders.length + 1).padStart(3, '0');
-const orderNumber = `INV-SALEE-${datePart}-${orderSeq}`;
+const orderNumber = `INV-SALEE-${datePart}-${orderSeq}-${randSuffix}`;
 const orderId = `ord-${Date.now()}`;
-const cleanWA = customerWhatsapp.replace(/\D/g, '');
+const cleanWA = digitsWA;
 let customer = state.db.customers.find(
 (c) => c.whatsapp.replace(/\D/g, '') === cleanWA
 );
 if (customer) {
 customer.name = customerName;
 customer.address = shippingAddress;
+customer.city = city;
 customer.total_orders += 1;
-customer.total_spent += summary.total;
+customer.total_spent += verifiedTotal;
 customer.last_order_at = now;
 } else {
 customer = {
 id: `cst-${Date.now()}`,
-user_id: state.currentUser ? state.currentUser.id : null,
+user_id: (state.currentUser && state.currentUser.role === 'customer') ? state.currentUser.id : null,
 name: customerName,
 whatsapp: customerWhatsapp,
-email: state.currentUser ? state.currentUser.email : '',
+email: (state.currentUser && state.currentUser.role === 'customer') ? state.currentUser.email : '',
 address: shippingAddress,
-city: shippingAddress.split(',').pop().trim().slice(0, 25) || 'Indonesia',
+city: city,
 total_orders: 1,
-total_spent: summary.total,
+total_spent: verifiedTotal,
 last_order_at: now,
 created_at: now,
 };
 state.db.customers.unshift(customer);
 }
-const initialStatus = paymentMethod === 'Transfer Bank' ? 'Menunggu Pembayaran' : 'Diproses';
+const initialStatus =
+paymentMethod === 'Transfer Bank'
+? 'Menunggu Pembayaran'
+: paymentMethod === 'WhatsApp'
+? 'Menunggu Konfirmasi'
+: 'Diproses';
 const deductImmediately = initialStatus === 'Diproses';
 const newOrder = {
 id: orderId,
@@ -309,11 +501,13 @@ customer_id: customer.id,
 customer_name: customerName,
 customer_whatsapp: customerWhatsapp,
 shipping_address: shippingAddress,
+shipping_address_detail: addressDetail,
+shipping_status: shipInfo.status,
 notes: notes || '-',
-subtotal: summary.subtotal,
-shipping_cost: summary.shipping,
+subtotal: verifiedSubtotal,
+shipping_cost: verifiedShipping,
 discount_amount: 0,
-total_amount: summary.total,
+total_amount: verifiedTotal,
 payment_method: paymentMethod,
 status: initialStatus,
 stock_deducted: deductImmediately,
@@ -321,7 +515,7 @@ created_at: now,
 updated_at: now,
 };
 state.db.orders.unshift(newOrder);
-summary.items.forEach((item, index) => {
+verifiedItems.forEach((item, index) => {
 state.db.order_items.push({
 id: `oi-${Date.now()}-${index}`,
 order_id: orderId,
@@ -362,46 +556,41 @@ order_id: orderId,
 payment_method: paymentMethod,
 bank_name: paymentMethod === 'Transfer Bank' ? state.db.settings.bank_name : paymentMethod,
 account_sender: customerName,
-amount: summary.total,
+amount: verifiedTotal,
 status: deductImmediately ? 'Verified' : 'Pending',
 paid_at: deductImmediately ? now : null,
 verified_by: null,
 created_at: now,
 };
 state.db.payments.unshift(newPayment);
+
+const savedOk = persistAll();
+state.isSubmittingOrder = false;
+if (!savedOk) {
+showToast('Gagal menyimpan pesanan ke penyimpanan lokal. Mohon coba lagi.', 'error');
+renderApp();
+return;
+}
+
 state.cart = [];
+window.SaleeDB.saveCart([]);
 state.checkoutOpen = false;
 state.orderSuccessData = {
 orderNumber,
 orderId,
-totalAmount: summary.total,
+subtotal: verifiedSubtotal,
+shippingCost: verifiedShipping,
+shippingStatus: shipInfo.status,
+totalAmount: verifiedTotal,
 paymentMethod,
+status: initialStatus,
 customerName,
 customerWhatsapp,
 shippingAddress,
-items: summary.items,
+items: verifiedItems,
 };
-persistAll();
-showToast(`Pesanan ${orderNumber} berhasil dibuat! Menyimpan ke Supabase...`);
+showToast(`Pesanan ${orderNumber} berhasil dibuat!`);
 renderApp();
-if (window.SaleeDB && typeof window.SaleeDB.syncCheckoutToSupabase === 'function') {
-window.SaleeDB.syncCheckoutToSupabase({
-customer,
-order: newOrder,
-items: summary.items,
-payment: newPayment,
-}).then((res) => {
-if (res && res.ok) {
-showToast(`Pesanan ${orderNumber} tersimpan di Supabase (orders & order_items)!`, 'success');
-} else {
-console.warn('Supabase checkout sync warning:', res && res.error);
-showToast(
-`Pesanan tersimpan lokal. Gagal sinkron ke Supabase: ${(res && res.error) || 'Periksa tabel & RLS Supabase'}`,
-'warning'
-);
-}
-});
-}
 }
 function openSkipOrSwitchToAdmin() {
 if (state.currentUser && state.currentUser.role === 'admin' && state.currentUser.localAdminVerified) {
@@ -460,32 +649,48 @@ renderApp();
 }
 async function handleAdminAuthSubmit(e) {
 e.preventDefault();
+if (state.adminLoginLoading) return;
 const form = e.target;
 const email = form.email.value.trim();
 const password = form.password ? form.password.value : '';
 if (!email || !password) {
-showToast('Masukkan email dan password akun Admin.', 'error');
+state.adminLoginError = 'Masukkan email dan password akun Owner.';
+renderApp();
 return;
 }
+state.adminLoginLoading = true;
+state.adminLoginError = '';
+renderApp();
+
 const res = await window.SaleeDB.verifyLocalAdminLogin(email, password);
+state.adminLoginLoading = false;
 if (!res || !res.ok) {
-showToast((res && res.error) || 'Email atau password Admin salah.', 'error');
+state.adminLoginError = (res && res.error) || 'Email atau password Owner salah.';
+showToast(state.adminLoginError, 'error');
+renderApp();
 return;
 }
 state.currentUser = res.user;
 state.authModalOpen = false;
-state.viewMode = 'admin';
+state.adminLoginError = '';
+state.showOwnerPassword = false;
 persistAll();
 showToast(`Login berhasil! Selamat datang, ${res.user.full_name}.`);
 window.scrollTo({ top: 0, behavior: 'smooth' });
-renderApp();
+navigateToRoute('/admin');
 }
 function handleLogout() {
+const wasAdmin = state.viewMode === 'admin' || (state.currentUser && state.currentUser.role === 'admin');
 state.currentUser = null;
-state.viewMode = 'store';
+state.adminLoginError = '';
+state.showOwnerPassword = false;
 persistAll();
 showToast('Anda telah keluar dari sesi akun.', 'info');
-renderApp();
+if (wasAdmin) {
+navigateToRoute('/owner-login');
+} else {
+navigateToRoute('/');
+}
 }
 function openProductModal(productId = null) {
 if (productId) {
@@ -904,17 +1109,11 @@ reader.readAsDataURL(file);
 }
 function renderNavbar() {
 const cartSummary = getCartSummary();
-const lowStockCount = state.db.products.filter((p) => p.stock <= p.min_stock).length;
+const isCustomer = state.currentUser && state.currentUser.role === 'customer';
 return `
 <!-- Top Tropical Bar --><div class="bg-[#633D25] text-[#FFF5DF] text-xs py-2 px-4 border-b border-[#F5C84C]/20"><div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2"><div class="flex items-center gap-2"><span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#F5C84C] text-[#633D25]"><i data-lucide="sparkles" class="w-3 h-3"></i> TROPICAL CRAFT SNACK
 </span><span class="font-medium">Gratis Ongkir Otomatis untuk belanja di atas <strong>${formatRp(state.db.settings.free_shipping_threshold)}</strong>!</span></div><div class="flex items-center gap-4"><span class="hidden sm:inline-flex items-center gap-1 text-[#FFF5DF]/85"><i data-lucide="shield-check" class="w-3.5 h-3.5 text-[#F5C84C]"></i> 100% Halal & Tanpa Pengawet
-</span><button
-type="button"
-onclick="window.SaleeApp.openAdmin()"
-class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#F5C84C]/20 hover:bg-[#F5C84C] text-[#F5C84C] hover:text-[#633D25] font-bold transition-all text-xs cursor-pointer"
-><i data-lucide="layout-dashboard" class="w-3.5 h-3.5"></i><span>Panel Dashboard Admin</span>
-${lowStockCount > 0 ? `<span class="px-1.5 py-0.2 bg-red-500 text-white rounded-full text-[10px]">${lowStockCount}</span>` : ''}
-</button></div></div></div><!-- Sticky Main Navbar --><header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#633D25]/10 shadow-sm"><nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4"><!-- Brand Logo --><a href="#beranda" class="flex items-center gap-3 group"><div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#F5C84C] to-[#eab308] border-2 border-[#633D25] flex items-center justify-center text-[#633D25] shadow-md group-hover:rotate-6 transition-transform"><svg class="w-7 h-7 text-[#633D25]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13c3.5-2 8-2 10 2a5.5 5.5 0 0 1 8 5" /><path d="M5.15 17.89c5.52-1.52 8.65-6.89 7-12C11.55 4 11.5 2 13 2c3.22 0 5 5.5 5 8 0 6.5-4.2 12-10.49 12C5.11 22 2 22 2 20c0-1.5 1.14-1.55 3.15-2.11Z" /></svg></div><div><span class="font-display font-extrabold text-lg sm:text-xl tracking-tight text-[#633D25] block leading-none">
+</span></div></div></div><!-- Sticky Main Navbar --><header class="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-[#633D25]/10 shadow-sm"><nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4"><!-- Brand Logo --><a href="#beranda" class="flex items-center gap-3 group"><div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#F5C84C] to-[#eab308] border-2 border-[#633D25] flex items-center justify-center text-[#633D25] shadow-md group-hover:rotate-6 transition-transform"><svg class="w-7 h-7 text-[#633D25]" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 13c3.5-2 8-2 10 2a5.5 5.5 0 0 1 8 5" /><path d="M5.15 17.89c5.52-1.52 8.65-6.89 7-12C11.55 4 11.5 2 13 2c3.22 0 5 5.5 5 8 0 6.5-4.2 12-10.49 12C5.11 22 2 22 2 20c0-1.5 1.14-1.55 3.15-2.11Z" /></svg></div><div><span class="font-display font-extrabold text-lg sm:text-xl tracking-tight text-[#633D25] block leading-none">
 Keripik Pisang <span class="text-[#557447]">Salee</span></span><span class="text-[11px] font-semibold text-[#633D25]/65 tracking-wide uppercase mt-1 block">
 Modern Tropical Food UMKM
 </span></div></a><!-- Navigation Links --><div class="hidden md:flex items-center gap-1 lg:gap-2"><a href="#beranda" class="px-4 py-2 rounded-xl text-sm font-bold text-[#633D25] hover:bg-[#FFF5DF] transition">Beranda</a><a href="#produk" class="px-4 py-2 rounded-xl text-sm font-bold text-[#633D25] hover:bg-[#FFF5DF] transition">Produk</a><a href="#tentang-kami" class="px-4 py-2 rounded-xl text-sm font-bold text-[#633D25] hover:bg-[#FFF5DF] transition">Tentang Kami</a><a href="#kontak" class="px-4 py-2 rounded-xl text-sm font-bold text-[#633D25] hover:bg-[#FFF5DF] transition">Kontak</a></div><!-- Right Actions: Cart + Login/Register --><div class="flex items-center gap-2.5"><!-- Cart Button --><button
@@ -926,11 +1125,11 @@ aria-label="Keranjang Belanja"
 ${cartSummary.totalQty}
 </span></button><!-- Auth / Login Button -->
 ${
-state.currentUser
+isCustomer
 ? `
 <div class="hidden sm:flex items-center gap-2"><button
 type="button"
-onclick="${state.currentUser.role === 'admin' ? 'window.SaleeApp.openAdmin()' : 'window.SaleeApp.openAuthModal()'}"
+onclick="window.SaleeApp.openAuthModal()"
 class="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-2xl bg-[#557447] hover:bg-[#466039] text-white text-xs font-bold transition cursor-pointer"
 ><i data-lucide="user-check" class="w-4 h-4 text-[#F5C84C]"></i><span>${escapeHtml(state.currentUser.full_name.split(' ')[0])}</span></button><button
 type="button"
@@ -960,11 +1159,7 @@ state.mobileMenuOpen
 type="button"
 onclick="window.SaleeApp.openAuthModal()"
 class="w-full py-2.5 rounded-xl bg-[#633D25] text-white font-bold text-sm flex items-center justify-center gap-2"
-><i data-lucide="user" class="w-4 h-4 text-[#F5C84C]"></i><span>${state.currentUser ? escapeHtml(state.currentUser.full_name) : 'Login / Register'}</span></button><button
-type="button"
-onclick="window.SaleeApp.openAdmin()"
-class="w-full py-2.5 rounded-xl bg-[#F5C84C] text-[#633D25] font-extrabold text-sm flex items-center justify-center gap-2"
-><i data-lucide="layout-dashboard" class="w-4 h-4"></i><span>Buka Dashboard Admin</span></button></div></div>
+><i data-lucide="user" class="w-4 h-4 text-[#F5C84C]"></i><span>${isCustomer ? escapeHtml(state.currentUser.full_name) : 'Login / Register'}</span></button></div></div>
 `
 : ''
 }
@@ -1217,11 +1412,10 @@ return `
 ${escapeHtml(s.tagline)}. Diproduksi setiap hari dengan bahan baku lokal berkualitas tinggi dari petani Nusantara.
 </p><div class="text-xs text-[#F5C84C] font-semibold">
 Rekening Resmi: ${escapeHtml(s.bank_name)} ${escapeHtml(s.bank_account)} a.n ${escapeHtml(s.bank_holder)}
-</div></div><div><h4 class="font-extrabold text-sm text-[#F5C84C] uppercase tracking-wider mb-3">Navigasi Cepat</h4><ul class="space-y-2 text-xs sm:text-sm text-[#FFF5DF]/80"><li><a href="#beranda" class="hover:text-[#F5C84C]">Beranda</a></li><li><a href="#produk" class="hover:text-[#F5C84C]">Katalog Produk</a></li><li><a href="#tentang-kami" class="hover:text-[#F5C84C]">Tentang Kami</a></li><li><a href="#kontak" class="hover:text-[#F5C84C]">Hubungi Kami</a></li></ul></div><div><h4 class="font-extrabold text-sm text-[#F5C84C] uppercase tracking-wider mb-3">Akses Pengelola</h4><p class="text-xs text-[#FFF5DF]/75 mb-3">Kelola produk, stok persediaan, pesanan pelanggan, dan laporan penjualan UMKM.</p><button
-type="button"
-onclick="window.SaleeApp.openAdmin()"
+</div></div><div><h4 class="font-extrabold text-sm text-[#F5C84C] uppercase tracking-wider mb-3">Navigasi Cepat</h4><ul class="space-y-2 text-xs sm:text-sm text-[#FFF5DF]/80"><li><a href="#beranda" class="hover:text-[#F5C84C]">Beranda</a></li><li><a href="#produk" class="hover:text-[#F5C84C]">Katalog Produk</a></li><li><a href="#tentang-kami" class="hover:text-[#F5C84C]">Tentang Kami</a></li><li><a href="#kontak" class="hover:text-[#F5C84C]">Hubungi Kami</a></li></ul></div><div><h4 class="font-extrabold text-sm text-[#F5C84C] uppercase tracking-wider mb-3">Layanan Pelanggan</h4><p class="text-xs text-[#FFF5DF]/75 mb-3">Butuh bantuan pemesanan eceran, hampers, atau kemitraan reseller?</p><a
+href="#kontak"
 class="px-4 py-2.5 rounded-xl bg-[#F5C84C] text-[#633D25] font-extrabold text-xs inline-flex items-center gap-2 hover:bg-amber-300 transition cursor-pointer"
-><i data-lucide="layout-dashboard" class="w-4 h-4"></i><span>Buka Dashboard Admin</span></button></div></div><div class="pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-[#FFF5DF]/65 gap-2"><div>&copy; ${new Date().getFullYear()} ${escapeHtml(s.store_name)}. Seluruh hak cipta dilindungi.</div><div>Modern Tropical Food Branding â€¢ Fullstack E-Commerce & ERP UMKM</div></div></div></footer>
+><i data-lucide="message-circle" class="w-4 h-4"></i><span>Hubungi Kami</span></a></div></div><div class="pt-6 flex flex-col sm:flex-row items-center justify-between text-xs text-[#FFF5DF]/65 gap-2"><div>&copy; ${new Date().getFullYear()} ${escapeHtml(s.store_name)}. Seluruh hak cipta dilindungi.</div><div>Modern Tropical Food Branding â€¢ Fullstack E-Commerce & ERP UMKM</div></div></div></footer>
 `;
 }
 function renderProductDetailModal() {
@@ -1345,137 +1539,177 @@ function renderCheckoutModal() {
 if (!state.checkoutOpen) return '';
 const summary = getCartSummary();
 const s = state.db.settings;
+const f = state.checkoutForm || {};
+const pm = f.paymentMethod || 'Transfer Bank';
 return `
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"><div class="bg-white rounded-3xl max-w-4xl w-full overflow-hidden shadow-2xl border-2 border-[#633D25]/15 my-8"><div class="px-6 py-4 bg-[#633D25] text-white flex items-center justify-between"><div class="flex items-center gap-2.5"><i data-lucide="shield-check" class="w-5 h-5 text-[#F5C84C]"></i><h3 class="font-display font-extrabold text-lg">Formulir Checkout & Pengiriman</h3></div><button
+<div class="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/60 backdrop-blur-sm overflow-y-auto"><div class="bg-white rounded-3xl max-w-5xl w-full overflow-hidden shadow-2xl border-2 border-[#633D25]/15 my-4 sm:my-8"><div class="px-5 sm:px-6 py-4 bg-[#633D25] text-white flex items-center justify-between"><div class="flex items-center gap-2.5"><i data-lucide="shield-check" class="w-5 h-5 text-[#F5C84C]"></i><h3 class="font-display font-extrabold text-base sm:text-lg">Formulir Checkout & Pengiriman</h3></div><button
 type="button"
 onclick="window.SaleeApp.closeCheckout()"
 class="p-2 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
-><i data-lucide="x" class="w-5 h-5"></i></button></div><form onsubmit="window.SaleeApp.submitCheckout(event)" class="p-6 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-8 max-h-[84vh] overflow-y-auto"><!-- Left: Customer Form --><div class="lg:col-span-7 space-y-4"><h4 class="font-display font-extrabold text-base text-[#633D25] border-b border-[#633D25]/10 pb-2">1. Informasi Pengiriman Pelanggan</h4><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Nama Pelanggan *</label><input
+><i data-lucide="x" class="w-5 h-5"></i></button></div><form onsubmit="window.SaleeApp.submitCheckout(event)" class="p-5 sm:p-8 grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 max-h-[85vh] overflow-y-auto"><!-- Left: Customer Form --><div class="lg:col-span-7 space-y-4"><h4 class="font-display font-extrabold text-base text-[#633D25] border-b border-[#633D25]/10 pb-2">1. Informasi Penerima</h4><div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5"><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Nama Lengkap Penerima *</label><input
 type="text"
 name="customerName"
 required
-value="${state.currentUser ? escapeHtml(state.currentUser.full_name) : ''}"
-placeholder="Masukkan nama lengkap penerima"
+value="${escapeHtml(f.customerName || '')}"
+oninput="window.SaleeApp.updateCheckoutField('customerName', this.value, false)"
+placeholder="Masukkan nama lengkap Anda"
 class="w-full px-4 py-3 rounded-xl bg-[#FFF5DF]/60 border border-[#633D25]/20 text-sm text-[#633D25] focus:outline-none focus:ring-2 focus:ring-[#F5C84C]"
 /></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Nomor WhatsApp Aktif *</label><input
 type="tel"
 name="customerWhatsapp"
 required
-value="${state.currentUser ? escapeHtml(state.currentUser.phone) : ''}"
+value="${escapeHtml(f.customerWhatsapp || '')}"
+oninput="window.SaleeApp.updateCheckoutField('customerWhatsapp', this.value, false)"
 placeholder="Contoh: 081234567890"
 class="w-full px-4 py-3 rounded-xl bg-[#FFF5DF]/60 border border-[#633D25]/20 text-sm text-[#633D25] focus:outline-none focus:ring-2 focus:ring-[#F5C84C]"
-/></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Alamat Lengkap Pengiriman *</label><textarea
-name="shippingAddress"
-rows="3"
+/></div></div><h4 class="font-display font-extrabold text-base text-[#633D25] border-b border-[#633D25]/10 pb-2 pt-2">2. Alamat Pengiriman Terstruktur</h4><div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5"><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Provinsi *</label><select
+name="province"
 required
-placeholder="Nama jalan, nomor rumah, RT/RW, kelurahan, kecamatan, kota, dan kode pos"
+onchange="window.SaleeApp.updateCheckoutField('province', this.value, true)"
+class="w-full px-4 py-3 rounded-xl bg-[#FFF5DF]/60 border border-[#633D25]/20 text-sm font-semibold text-[#633D25] focus:outline-none focus:ring-2 focus:ring-[#F5C84C]"
+><option value="">-- Pilih Provinsi --</option>
+${INDONESIA_PROVINCES.map((prov) => `<option value="${escapeHtml(prov)}" ${f.province === prov ? 'selected' : ''}>${escapeHtml(prov)}</option>`).join('')}
+</select></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Kabupaten / Kota *</label><input
+type="text"
+name="city"
+required
+value="${escapeHtml(f.city || '')}"
+oninput="window.SaleeApp.updateCheckoutField('city', this.value, false)"
+placeholder="Contoh: Kota Bandung"
 class="w-full px-4 py-3 rounded-xl bg-[#FFF5DF]/60 border border-[#633D25]/20 text-sm text-[#633D25] focus:outline-none focus:ring-2 focus:ring-[#F5C84C]"
-></textarea></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Catatan Pesanan (Opsional)</label><input
+/></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Kecamatan *</label><input
+type="text"
+name="district"
+required
+value="${escapeHtml(f.district || '')}"
+oninput="window.SaleeApp.updateCheckoutField('district', this.value, false)"
+placeholder="Contoh: Coblong"
+class="w-full px-4 py-3 rounded-xl bg-[#FFF5DF]/60 border border-[#633D25]/20 text-sm text-[#633D25] focus:outline-none focus:ring-2 focus:ring-[#F5C84C]"
+/></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Desa / Kelurahan *</label><input
+type="text"
+name="village"
+required
+value="${escapeHtml(f.village || '')}"
+oninput="window.SaleeApp.updateCheckoutField('village', this.value, false)"
+placeholder="Contoh: Dago"
+class="w-full px-4 py-3 rounded-xl bg-[#FFF5DF]/60 border border-[#633D25]/20 text-sm text-[#633D25] focus:outline-none focus:ring-2 focus:ring-[#F5C84C]"
+/></div><div class="sm:col-span-2 grid grid-cols-1 sm:grid-cols-3 gap-3.5"><div class="sm:col-span-2"><label class="block text-xs font-extrabold text-[#633D25] mb-1">Nama Jalan & Nomor Rumah *</label><input
+type="text"
+name="streetAddress"
+required
+value="${escapeHtml(f.streetAddress || '')}"
+oninput="window.SaleeApp.updateCheckoutField('streetAddress', this.value, false)"
+placeholder="Contoh: Jl. Dago Asri No. 42, RT 02 / RW 05"
+class="w-full px-4 py-3 rounded-xl bg-[#FFF5DF]/60 border border-[#633D25]/20 text-sm text-[#633D25] focus:outline-none focus:ring-2 focus:ring-[#F5C84C]"
+/></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Kode Pos (5 Digit) *</label><input
+type="text"
+name="postalCode"
+required
+maxlength="5"
+pattern="[0-9]{5}"
+value="${escapeHtml(f.postalCode || '')}"
+oninput="window.SaleeApp.updateCheckoutField('postalCode', this.value, false)"
+placeholder="Contoh: 40135"
+class="w-full px-4 py-3 rounded-xl bg-[#FFF5DF]/60 border border-[#633D25]/20 text-sm text-[#633D25] focus:outline-none focus:ring-2 focus:ring-[#F5C84C]"
+/></div></div></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Catatan Pesanan (Opsional)</label><input
 type="text"
 name="notes"
+value="${escapeHtml(f.notes || '')}"
+oninput="window.SaleeApp.updateCheckoutField('notes', this.value, false)"
 placeholder="Contoh: Tolong bungkus bubble wrap tebal untuk oleh-oleh"
 class="w-full px-4 py-3 rounded-xl bg-[#FFF5DF]/60 border border-[#633D25]/20 text-sm text-[#633D25] focus:outline-none focus:ring-2 focus:ring-[#F5C84C]"
-/></div><h4 class="font-display font-extrabold text-base text-[#633D25] border-b border-[#633D25]/10 pb-2 pt-2">2. Pilih Metode Pembayaran</h4><div class="space-y-2.5"><label class="flex items-start gap-3 p-3.5 rounded-2xl bg-[#FFF5DF]/70 border-2 border-[#633D25]/20 cursor-pointer hover:border-[#633D25]"><input type="radio" name="paymentMethod" value="Transfer Bank" checked class="mt-1 accent-[#633D25]" /><div class="text-xs"><div class="font-extrabold text-sm text-[#633D25]">Transfer Bank (${escapeHtml(s.bank_name)})</div><div class="text-[#633D25]/75 mt-0.5">No. Rek: <strong>${escapeHtml(s.bank_account)}</strong> a.n ${escapeHtml(s.bank_holder)}</div></div></label>
+/></div><h4 class="font-display font-extrabold text-base text-[#633D25] border-b border-[#633D25]/10 pb-2 pt-2">3. Pilih Metode Pembayaran</h4><div class="space-y-2.5"><label class="flex items-start gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition ${pm === 'Transfer Bank' ? 'bg-[#FFF5DF] border-[#633D25]' : 'bg-[#FFF5DF]/50 border-[#633D25]/15 hover:border-[#633D25]/50'}"><input type="radio" name="paymentMethod" value="Transfer Bank" ${pm === 'Transfer Bank' ? 'checked' : ''} onchange="window.SaleeApp.updateCheckoutField('paymentMethod', 'Transfer Bank', true)" class="mt-1 accent-[#633D25]" /><div class="text-xs flex-1 space-y-1.5"><div class="font-extrabold text-sm text-[#633D25]">Transfer ${escapeHtml(s.bank_name)}</div><div class="text-[#633D25]/80">Atas Nama: <strong>${escapeHtml(s.bank_holder)}</strong></div><div class="flex flex-wrap items-center gap-2"><span class="font-mono font-extrabold text-sm bg-white px-2.5 py-1 rounded-lg border border-[#633D25]/20 text-[#633D25]">${escapeHtml(s.bank_account)}</span><button type="button" onclick="window.SaleeApp.copyBankAccount()" class="px-2.5 py-1 rounded-lg bg-[#633D25] text-[#F5C84C] font-bold text-[11px] inline-flex items-center gap-1 cursor-pointer"><i data-lucide="copy" class="w-3 h-3"></i> Salin No. Rekening</button></div><p class="text-[11px] text-[#633D25]/75">Instruksi: Lakukan transfer sesuai total pembayaran, lalu kirim bukti transfer ke Admin. Status pesanan akan tercatat sebagai <strong>Menunggu Pembayaran</strong>.</p></div></label>
 ${
 s.cod_enabled
 ? `
-<label class="flex items-start gap-3 p-3.5 rounded-2xl bg-[#FFF5DF]/70 border-2 border-[#633D25]/20 cursor-pointer hover:border-[#633D25]"><input type="radio" name="paymentMethod" value="COD" class="mt-1 accent-[#633D25]" /><div class="text-xs"><div class="font-extrabold text-sm text-[#633D25]">COD (Bayar di Tempat)</div><div class="text-[#633D25]/75 mt-0.5">Bayar tunai langsung ke kurir saat paket Keripik Pisang Salee tiba di rumah Anda.</div></div></label>
+<label class="flex items-start gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition ${pm === 'COD' ? 'bg-[#FFF5DF] border-[#633D25]' : 'bg-[#FFF5DF]/50 border-[#633D25]/15 hover:border-[#633D25]/50'}"><input type="radio" name="paymentMethod" value="COD" ${pm === 'COD' ? 'checked' : ''} onchange="window.SaleeApp.updateCheckoutField('paymentMethod', 'COD', true)" class="mt-1 accent-[#633D25]" /><div class="text-xs space-y-1"><div class="font-extrabold text-sm text-[#633D25]">COD (Bayar di Tempat)</div><p class="text-[#633D25]/75">Instruksi: Pembayaran dilakukan secara tunai langsung kepada kurir saat paket Keripik Pisang Salee diterima di alamat Anda. Pastikan nomor WhatsApp aktif untuk koordinasi kurir.</p></div></label>
 `
 : ''
 }
-<label class="flex items-start gap-3 p-3.5 rounded-2xl bg-[#FFF5DF]/70 border-2 border-[#633D25]/20 cursor-pointer hover:border-[#633D25]"><input type="radio" name="paymentMethod" value="WhatsApp" class="mt-1 accent-[#633D25]" /><div class="text-xs"><div class="font-extrabold text-sm text-[#633D25]">Konfirmasi Pesanan melalui WhatsApp</div><div class="text-[#633D25]/75 mt-0.5">Pesanan tercatat otomatis di sistem & diteruskan ke WhatsApp Admin resmi kami.</div></div></label></div></div><!-- Right: Order Summary --><div class="lg:col-span-5 flex flex-col justify-between bg-[#FFF5DF] rounded-3xl p-6 border border-[#633D25]/15 space-y-6"><div class="space-y-4"><h4 class="font-display font-extrabold text-base text-[#633D25]">Ringkasan Pesanan (${summary.totalQty} Pouch)</h4><div class="space-y-3 max-h-60 overflow-y-auto pr-1">
+<label class="flex items-start gap-3 p-3.5 rounded-2xl border-2 cursor-pointer transition ${pm === 'WhatsApp' ? 'bg-[#FFF5DF] border-[#633D25]' : 'bg-[#FFF5DF]/50 border-[#633D25]/15 hover:border-[#633D25]/50'}"><input type="radio" name="paymentMethod" value="WhatsApp" ${pm === 'WhatsApp' ? 'checked' : ''} onchange="window.SaleeApp.updateCheckoutField('paymentMethod', 'WhatsApp', true)" class="mt-1 accent-[#633D25]" /><div class="text-xs space-y-1"><div class="font-extrabold text-sm text-[#633D25]">Konfirmasi Pesanan melalui WhatsApp</div><p class="text-[#633D25]/75">Instruksi: Setelah menekan tombol buat pesanan, Anda dapat langsung mengirimkan ringkasan pesanan otomatis (nama, alamat, daftar produk, & total) ke WhatsApp Admin resmi kami.</p></div></label></div></div><!-- Right: Order Summary --><div class="lg:col-span-5 flex flex-col justify-between bg-[#FFF5DF] rounded-3xl p-5 sm:p-6 border border-[#633D25]/15 space-y-5 h-fit lg:sticky lg:top-0"><div class="space-y-4"><h4 class="font-display font-extrabold text-base text-[#633D25]">Ringkasan Pesanan (${summary.totalQty} Pouch)</h4><div class="space-y-3 max-h-64 overflow-y-auto pr-1">
 ${summary.items
 .map(
 (i) => `
-<div class="flex items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#633D25]/10"><div class="flex items-center gap-2.5 min-w-0"><img src="${escapeHtml(i.product.image_url)}" class="w-11 h-11 rounded-xl object-cover shrink-0" /><div class="min-w-0"><div class="text-xs font-extrabold text-[#633D25] truncate">${escapeHtml(i.product.name)}</div><div class="text-[11px] text-[#633D25]/70">${i.quantity} x ${formatRp(i.product.price)}</div></div></div><div class="text-xs font-extrabold text-[#633D25] shrink-0">${formatRp(i.subtotal)}</div></div>
+<div class="flex items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-[#633D25]/10"><div class="flex items-center gap-2.5 min-w-0"><img src="${escapeHtml(i.product.image_url)}" class="w-12 h-12 rounded-xl object-cover shrink-0" /><div class="min-w-0"><div class="text-xs font-extrabold text-[#633D25] truncate">${escapeHtml(i.product.name)}</div><div class="text-[11px] text-[#633D25]/65">${i.product.weight_grams}g • ${formatRp(i.product.price)}/pouch</div><div class="flex items-center gap-1.5 mt-1"><button type="button" onclick="window.SaleeApp.updateCartQty('${i.product_id}', -1)" class="w-5 h-5 rounded bg-[#FFF5DF] text-[#633D25] font-extrabold text-xs cursor-pointer">-</button><span class="text-xs font-extrabold px-1">${i.quantity}</span><button type="button" onclick="window.SaleeApp.updateCartQty('${i.product_id}', 1)" class="w-5 h-5 rounded bg-[#FFF5DF] text-[#633D25] font-extrabold text-xs cursor-pointer">+</button></div></div></div><div class="text-xs font-extrabold text-[#633D25] shrink-0">${formatRp(i.subtotal)}</div></div>
 `
 )
 .join('')}
-</div><div class="space-y-2 pt-3 border-t border-[#633D25]/15 text-xs sm:text-sm"><div class="flex justify-between text-[#633D25]/80"><span>Subtotal Produk</span><span class="font-bold">${formatRp(summary.subtotal)}</span></div><div class="flex justify-between text-[#633D25]/80"><span>Biaya Pengiriman</span><span class="font-bold">${summary.shipping === 0 ? 'GRATIS' : formatRp(summary.shipping)}</span></div><div class="flex justify-between text-lg font-extrabold text-[#633D25] pt-2 border-t border-[#633D25]/15"><span>Total Pembayaran</span><span class="text-[#557447]">${formatRp(summary.total)}</span></div></div></div><button
+</div>
+${
+summary.shippingStatus === 'unavailable'
+? `<div class="p-3 rounded-xl bg-amber-50 border border-amber-300 text-[11px] text-amber-900 font-semibold">Tarif pengiriman untuk provinsi <strong>${escapeHtml(f.province)}</strong> belum tersedia di sistem. Ongkos kirim akan dikonfirmasi oleh Admin sebelum pengiriman.</div>`
+: ''
+}
+<div class="space-y-2 pt-3 border-t border-[#633D25]/15 text-xs sm:text-sm"><div class="flex justify-between text-[#633D25]/80"><span>Subtotal Produk</span><span class="font-bold">${formatRp(summary.subtotal)}</span></div><div class="flex justify-between text-[#633D25]/80"><span>Biaya Pengiriman ${f.province ? `(${escapeHtml(f.province)})` : ''}</span><span class="font-bold text-right">${escapeHtml(summary.shippingLabel)}</span></div>${summary.discount > 0 ? `<div class="flex justify-between text-[#557447]"><span>Diskon</span><span class="font-bold">-${formatRp(summary.discount)}</span></div>` : ''}<div class="flex justify-between text-lg font-extrabold text-[#633D25] pt-2 border-t border-[#633D25]/15"><span>Total Pembayaran</span><span class="text-[#557447]">${formatRp(summary.total)}</span></div></div></div><button
 type="submit"
-class="w-full py-4 rounded-2xl bg-[#633D25] hover:bg-[#4e2f1c] text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-xl transition cursor-pointer"
-><i data-lucide="check-circle-2" class="w-5 h-5 text-[#F5C84C]"></i><span>Buat Pesanan Sekarang</span></button></div></form></div></div>
+${state.isSubmittingOrder ? 'disabled' : ''}
+class="w-full py-4 rounded-2xl bg-[#633D25] hover:bg-[#4e2f1c] disabled:opacity-60 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-xl transition cursor-pointer"
+><i data-lucide="${state.isSubmittingOrder ? 'loader-2' : 'check-circle-2'}" class="w-5 h-5 text-[#F5C84C] ${state.isSubmittingOrder ? 'animate-spin' : ''}"></i><span>${state.isSubmittingOrder ? 'Memproses Pesanan...' : 'Buat Pesanan Sekarang'}</span></button></div></form></div></div>
 `;
 }
 function renderOrderSuccessModal() {
 if (!state.orderSuccessData) return '';
 const d = state.orderSuccessData;
 const s = state.db.settings;
+const itemsText = (d.items || [])
+.map((i) => `  - ${i.product.name} (${i.quantity}x) = ${formatRp(i.subtotal)}`)
+.join('\n');
 const waText = encodeURIComponent(
 `Halo Admin *${s.store_name}*! Saya ingin mengonfirmasi pesanan saya:\n\n` +
-`â€¢ No. Pesanan: *${d.orderNumber}*\n` +
-`â€¢ Nama: ${d.customerName}\n` +
-`â€¢ Metode Bayar: ${d.paymentMethod}\n` +
-`â€¢ Total: *${formatRp(d.totalAmount)}*\n` +
-`â€¢ Alamat: ${d.shippingAddress}\n\nMohon segera diproses ya kak, terima kasih!`
+`• No. Pesanan: *${d.orderNumber}*\n` +
+`• Nama: ${d.customerName}\n` +
+`• No. WhatsApp: ${d.customerWhatsapp}\n` +
+`• Alamat: ${d.shippingAddress}\n` +
+`• Daftar Produk:\n${itemsText}\n` +
+`• Metode Bayar: ${d.paymentMethod}\n` +
+`• Total Pembayaran: *${formatRp(d.totalAmount)}*\n\nMohon segera diproses ya kak, terima kasih!`
 );
 const waUrl = `https://wa.me/${s.whatsapp.replace(/\D/g, '')}?text=${waText}`;
 return `
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm overflow-y-auto"><div class="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 text-center shadow-2xl border-4 border-[#F5C84C] space-y-5"><div class="w-20 h-20 rounded-full bg-[#557447]/15 text-[#557447] flex items-center justify-center mx-auto"><i data-lucide="check-circle-2" class="w-12 h-12"></i></div><div class="space-y-1"><span class="px-3 py-1 rounded-full bg-[#F5C84C] text-[#633D25] text-xs font-extrabold uppercase">Checkout Berhasil</span><h3 class="font-display text-2xl font-extrabold text-[#633D25] pt-1">Terima Kasih, ${escapeHtml(d.customerName)}!</h3><p class="text-xs sm:text-sm text-[#633D25]/75">Pesanan Anda telah tercatat di database kami dan siap diproses.</p></div><div class="p-4 rounded-2xl bg-[#FFF5DF] border border-[#633D25]/15 text-left space-y-2 text-xs sm:text-sm"><div class="flex justify-between"><span class="text-[#633D25]/70">Nomor Pesanan:</span><span class="font-extrabold text-[#633D25] font-mono">${escapeHtml(d.orderNumber)}</span></div><div class="flex justify-between"><span class="text-[#633D25]/70">Metode Pembayaran:</span><span class="font-bold text-[#633D25]">${escapeHtml(d.paymentMethod)}</span></div><div class="flex justify-between"><span class="text-[#633D25]/70">Total Pembayaran:</span><span class="font-extrabold text-[#557447] text-base">${formatRp(d.totalAmount)}</span></div>
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm overflow-y-auto"><div class="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-8 text-center shadow-2xl border-4 border-[#F5C84C] space-y-5 my-6"><div class="w-16 h-16 rounded-full bg-[#557447]/15 text-[#557447] flex items-center justify-center mx-auto"><i data-lucide="check-circle-2" class="w-10 h-10"></i></div><div class="space-y-1"><span class="px-3 py-1 rounded-full bg-[#F5C84C] text-[#633D25] text-xs font-extrabold uppercase">Pesanan Berhasil Dibuat</span><h3 class="font-display text-2xl font-extrabold text-[#633D25] pt-1">Terima Kasih, ${escapeHtml(d.customerName)}!</h3><p class="text-xs sm:text-sm text-[#633D25]/75">Pesanan Anda telah tersimpan dan siap diproses.</p></div><div class="p-4 rounded-2xl bg-[#FFF5DF] border border-[#633D25]/15 text-left space-y-2 text-xs sm:text-sm"><div class="flex justify-between gap-2"><span class="text-[#633D25]/70">Nomor Pesanan:</span><span class="font-extrabold text-[#633D25] font-mono">${escapeHtml(d.orderNumber)}</span></div><div class="flex justify-between gap-2"><span class="text-[#633D25]/70">Status Pesanan:</span><span>${renderOrderStatusBadge(d.status || 'Menunggu Pembayaran')}</span></div><div class="flex justify-between gap-2"><span class="text-[#633D25]/70">Metode Pembayaran:</span><span class="font-bold text-[#633D25]">${escapeHtml(d.paymentMethod)}</span></div><div class="pt-2 border-t border-[#633D25]/10"><div class="text-[11px] font-bold text-[#633D25]/70 mb-1">Alamat Pengiriman:</div><div class="text-xs text-[#633D25] font-semibold">${escapeHtml(d.shippingAddress)}</div></div><div class="pt-2 border-t border-[#633D25]/10 space-y-1"><div class="text-[11px] font-bold text-[#633D25]/70">Produk Dipesan:</div>${(d.items || []).map((i) => `<div class="flex justify-between text-xs"><span>${escapeHtml(i.product.name)} (${i.quantity}x)</span><span class="font-bold">${formatRp(i.subtotal)}</span></div>`).join('')}</div><div class="flex justify-between pt-2 border-t border-[#633D25]/15"><span class="font-bold text-[#633D25]">Total Pembayaran:</span><span class="font-extrabold text-[#557447] text-base">${formatRp(d.totalAmount)}</span></div>
 ${
 d.paymentMethod === 'Transfer Bank'
 ? `
-<div class="pt-2 mt-2 border-t border-[#633D25]/10 text-xs text-[#633D25]">
-Silakan transfer ke <strong>${escapeHtml(s.bank_name)} ${escapeHtml(s.bank_account)}</strong> a.n ${escapeHtml(s.bank_holder)}.
+<div class="pt-2 mt-1 border-t border-[#633D25]/10 text-xs text-[#633D25] flex flex-wrap items-center justify-between gap-2">
+<span>Transfer ke <strong>${escapeHtml(s.bank_name)} ${escapeHtml(s.bank_account)}</strong> a.n ${escapeHtml(s.bank_holder)}.</span>
+<button type="button" onclick="window.SaleeApp.copyBankAccount()" class="px-2.5 py-1 rounded-lg bg-[#633D25] text-[#F5C84C] font-bold text-[11px] cursor-pointer">Salin Rek</button>
 </div>
 `
 : ''
 }
-</div><div class="flex flex-col sm:flex-row gap-3 pt-2"><a
+</div><div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1"><button
+type="button"
+onclick="window.SaleeApp.openCustomerOrderDetail('${d.orderId}')"
+class="py-3 px-3 rounded-2xl bg-[#FFF5DF] hover:bg-[#F5C84C] text-[#633D25] border border-[#633D25]/20 font-extrabold text-xs cursor-pointer"
+>Lihat Detail Pesanan</button><a
 href="${waUrl}"
 target="_blank"
 rel="noopener noreferrer"
-class="flex-1 py-3.5 px-4 rounded-2xl bg-[#557447] hover:bg-[#445e38] text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md"
-><i data-lucide="message-circle" class="w-4 h-4"></i><span>Konfirmasi via WhatsApp</span></a><button
+class="py-3 px-3 rounded-2xl bg-[#557447] hover:bg-[#445e38] text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-md"
+><i data-lucide="message-circle" class="w-4 h-4"></i><span>WhatsApp Admin</span></a><button
 type="button"
 onclick="window.SaleeApp.closeOrderSuccess()"
-class="py-3.5 px-5 rounded-2xl bg-[#633D25] hover:bg-[#4e2f1c] text-white font-extrabold text-xs sm:text-sm cursor-pointer"
->
-Selesai & Lanjut Belanja
-</button></div></div></div>
+class="py-3 px-3 rounded-2xl bg-[#633D25] hover:bg-[#4e2f1c] text-white font-extrabold text-xs cursor-pointer"
+>Halaman Utama</button></div></div></div>
+`;
+}
+function renderCustomerOrderDetailModal() {
+if (!state.customerOrderDetailId) return '';
+const order = state.db.orders.find((o) => o.id === state.customerOrderDetailId);
+if (!order) return '';
+const items = state.db.order_items.filter((oi) => oi.order_id === order.id);
+return `
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/65 backdrop-blur-sm overflow-y-auto"><div class="bg-white rounded-3xl max-w-xl w-full overflow-hidden shadow-2xl border-2 border-[#633D25]/15 my-8"><div class="px-6 py-4 bg-[#633D25] text-white flex items-center justify-between"><div><span class="text-[11px] text-[#F5C84C] font-mono font-bold">${escapeHtml(order.order_number)}</span><h3 class="font-display font-extrabold text-lg">Detail & Status Pesanan</h3></div><button type="button" onclick="window.SaleeApp.closeCustomerOrderDetail()" class="p-1.5 rounded-xl bg-white/10 text-white cursor-pointer"><i data-lucide="x" class="w-5 h-5"></i></button></div><div class="p-6 space-y-4 max-h-[80vh] overflow-y-auto text-xs sm:text-sm"><div class="p-4 rounded-2xl bg-[#FFF5DF] space-y-1.5"><div class="flex justify-between"><span class="text-[#633D25]/70">Status Saat Ini:</span>${renderOrderStatusBadge(order.status)}</div><div class="flex justify-between"><span class="text-[#633D25]/70">Tanggal Pesan:</span><span class="font-bold">${formatDateID(order.created_at)}</span></div><div class="flex justify-between"><span class="text-[#633D25]/70">Penerima:</span><span class="font-extrabold">${escapeHtml(order.customer_name)} (${escapeHtml(order.customer_whatsapp)})</span></div><div class="pt-1 text-xs text-[#633D25]/85"><strong>Alamat:</strong> ${escapeHtml(order.shipping_address)}</div></div><div class="divide-y divide-[#633D25]/10 border border-[#633D25]/10 rounded-2xl overflow-hidden">${items.map((oi) => `<div class="p-3 flex items-center justify-between bg-white"><div class="flex items-center gap-3"><img src="${escapeHtml(oi.product_image)}" class="w-11 h-11 rounded-xl object-cover" /><div><div class="font-extrabold text-[#633D25]">${escapeHtml(oi.product_name)}</div><div class="text-xs text-[#633D25]/65">${oi.quantity} x ${formatRp(oi.unit_price)}</div></div></div><div class="font-extrabold text-[#557447]">${formatRp(oi.subtotal)}</div></div>`).join('')}</div><div class="p-4 rounded-2xl bg-[#FFF5DF]/60 space-y-1.5"><div class="flex justify-between"><span>Subtotal</span><span class="font-bold">${formatRp(order.subtotal)}</span></div><div class="flex justify-between"><span>Ongkos Kirim</span><span class="font-bold">${order.shipping_status === 'unavailable' ? 'Konfirmasi Admin' : formatRp(order.shipping_cost)}</span></div><div class="flex justify-between text-base font-extrabold text-[#633D25] pt-2 border-t border-[#633D25]/10"><span>Total Pembayaran</span><span class="text-[#557447]">${formatRp(order.total_amount)}</span></div></div><button type="button" onclick="window.SaleeApp.closeCustomerOrderDetail()" class="w-full py-3 rounded-2xl bg-[#633D25] text-white font-extrabold text-sm cursor-pointer">Tutup Detail Pesanan</button></div></div></div>
 `;
 }
 function renderAuthModal() {
 if (!state.authModalOpen) return '';
-const isAdminTab = state.authMode === 'admin';
 return `
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"><div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border-2 border-[#633D25]/15"><div class="px-6 py-4 bg-[#633D25] text-white flex items-center justify-between"><div class="flex items-center gap-2"><i data-lucide="lock" class="w-5 h-5 text-[#F5C84C]"></i><h3 class="font-display font-extrabold text-lg">${isAdminTab ? 'Login Owner / Admin' : 'Masuk / Daftar Pelanggan'}</h3></div><button
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"><div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border-2 border-[#633D25]/15"><div class="px-6 py-4 bg-[#633D25] text-white flex items-center justify-between"><div class="flex items-center gap-2"><i data-lucide="user" class="w-5 h-5 text-[#F5C84C]"></i><h3 class="font-display font-extrabold text-lg">Akun Pelanggan Salee</h3></div><button
 type="button"
 onclick="window.SaleeApp.closeAuthModal()"
 class="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
-><i data-lucide="x" class="w-5 h-5"></i></button></div><div class="p-6 space-y-5"><!-- Tab Switcher: Pelanggan vs Admin --><div class="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-[#FFF5DF] border border-[#633D25]/15"><button
-type="button"
-onclick="window.SaleeApp.setAuthMode('login')"
-class="py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${!isAdminTab ? 'bg-[#633D25] text-[#F5C84C] shadow' : 'text-[#633D25]'}"
->Akun Pelanggan</button><button
-type="button"
-onclick="window.SaleeApp.setAuthMode('admin')"
-class="py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${isAdminTab ? 'bg-[#633D25] text-[#F5C84C] shadow' : 'text-[#633D25]'}"
->Akses Owner / Admin</button></div>
-${
-isAdminTab
-? `
-<form onsubmit="window.SaleeApp.submitAdminAuth(event)" class="space-y-3.5"><div class="p-3.5 rounded-2xl bg-[#FFF5DF] border border-[#F5C84C] text-xs text-[#633D25] font-medium">Akses Dashboard Admin hanya tersedia untuk akun <strong>Owner / Admin</strong> yang terdaftar.</div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Email Akun *</label><input
-type="email"
-name="email"
-required
-placeholder="Masukkan email akun"
-autocomplete="email"
-class="w-full px-4 py-2.5 rounded-xl bg-[#FFF5DF]/50 border border-[#633D25]/20 text-sm"
-/></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Password *</label><input
-type="password"
-name="password"
-required
-placeholder="Masukkan password"
-autocomplete="current-password"
-class="w-full px-4 py-2.5 rounded-xl bg-[#FFF5DF]/50 border border-[#633D25]/20 text-sm"
-/></div><button
-type="submit"
-class="w-full py-3 rounded-2xl bg-[#633D25] hover:bg-[#4e2f1c] text-white font-extrabold text-sm cursor-pointer"
->Verifikasi & Masuk Dashboard</button></form>
-`
-: `
-<div class="p-4 rounded-2xl bg-[#FFF5DF] border border-[#F5C84C] space-y-2.5"><div class="text-xs font-extrabold text-[#633D25] uppercase tracking-wider">Login Cepat Pelanggan:</div><button
+><i data-lucide="x" class="w-5 h-5"></i></button></div><div class="p-6 space-y-5"><div class="p-4 rounded-2xl bg-[#FFF5DF] border border-[#F5C84C] space-y-2.5"><div class="text-xs font-extrabold text-[#633D25] uppercase tracking-wider">Login Cepat Pelanggan:</div><button
 type="button"
 onclick="window.SaleeApp.loginDemoCustomer()"
 class="w-full py-2.5 px-3 rounded-xl bg-[#557447] hover:bg-[#445e38] text-white font-extrabold text-xs flex items-center justify-center gap-1.5 shadow cursor-pointer"
@@ -1493,10 +1727,45 @@ class="w-full px-4 py-2.5 rounded-xl bg-[#FFF5DF]/50 border border-[#633D25]/20 
 /></div><button
 type="submit"
 class="w-full py-3 rounded-2xl bg-[#633D25] hover:bg-[#4e2f1c] text-white font-extrabold text-sm cursor-pointer"
->Masuk / Daftar Pelanggan</button></form>
-`
+>Masuk / Daftar Pelanggan</button></form></div></div></div>
+`;
 }
-</div></div></div>
+function renderOwnerLoginPage() {
+return `
+<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#FFF5DF] via-[#FFF5DF] to-[#F5C84C]/35 p-4"><div class="w-full max-w-md bg-white rounded-3xl shadow-2xl border-2 border-[#633D25]/15 overflow-hidden"><div class="px-6 py-6 bg-[#633D25] text-white text-center space-y-2"><div class="w-14 h-14 rounded-2xl bg-[#F5C84C] text-[#633D25] flex items-center justify-center mx-auto shadow-lg"><i data-lucide="shield-check" class="w-7 h-7"></i></div><h1 class="font-display text-xl font-extrabold">Login Owner / Admin</h1><p class="text-xs text-[#FFF5DF]/80">Portal Khusus Pengelola UMKM Keripik Pisang Salee</p></div><form onsubmit="window.SaleeApp.submitAdminAuth(event)" class="p-6 sm:p-8 space-y-4">
+${
+state.adminLoginError
+? `<div class="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs font-bold flex items-center gap-2"><i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i><span>${escapeHtml(state.adminLoginError)}</span></div>`
+: ''
+}
+<div><label class="block text-xs font-extrabold text-[#633D25] mb-1.5">Email Owner *</label><input
+type="email"
+name="email"
+required
+autocomplete="email"
+placeholder="Masukkan email Owner"
+class="w-full px-4 py-3 rounded-xl bg-[#FFF5DF]/60 border border-[#633D25]/20 text-sm text-[#633D25] focus:outline-none focus:ring-2 focus:ring-[#F5C84C]"
+/></div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1.5">Password *</label><div class="relative"><input
+type="${state.showOwnerPassword ? 'text' : 'password'}"
+name="password"
+required
+autocomplete="current-password"
+placeholder="Masukkan password Owner"
+class="w-full pl-4 pr-11 py-3 rounded-xl bg-[#FFF5DF]/60 border border-[#633D25]/20 text-sm text-[#633D25] focus:outline-none focus:ring-2 focus:ring-[#F5C84C]"
+/><button
+type="button"
+onclick="window.SaleeApp.toggleOwnerPassword()"
+aria-label="Tampilkan atau sembunyikan password"
+class="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-[#633D25]/70 hover:text-[#633D25] cursor-pointer"
+><i data-lucide="${state.showOwnerPassword ? 'eye-off' : 'eye'}" class="w-4 h-4"></i></button></div></div><button
+type="submit"
+${state.adminLoginLoading ? 'disabled' : ''}
+class="w-full py-3.5 rounded-2xl bg-[#633D25] hover:bg-[#4e2f1c] disabled:opacity-60 text-white font-extrabold text-sm flex items-center justify-center gap-2 shadow-lg transition cursor-pointer"
+><i data-lucide="${state.adminLoginLoading ? 'loader-2' : 'log-in'}" class="w-4 h-4 text-[#F5C84C] ${state.adminLoginLoading ? 'animate-spin' : ''}"></i><span>${state.adminLoginLoading ? 'Memverifikasi...' : 'Masuk Dashboard Admin'}</span></button><div class="pt-3 border-t border-[#633D25]/10 text-center"><button
+type="button"
+onclick="window.SaleeApp.switchToStore()"
+class="text-xs font-bold text-[#633D25]/70 hover:text-[#633D25] inline-flex items-center gap-1 cursor-pointer"
+><i data-lucide="arrow-left" class="w-3.5 h-3.5"></i><span>Kembali ke Website Toko</span></button></div></form></div></div>
 `;
 }
 function getAdminStats() {
@@ -1687,6 +1956,7 @@ class="px-3 py-1.5 rounded-xl bg-[#633D25] hover:bg-[#4e2f1c] text-[#F5C84C] fon
 function renderOrderStatusBadge(status) {
 const map = {
 'Menunggu Pembayaran': 'bg-amber-100 text-amber-800 border-amber-300',
+'Menunggu Konfirmasi': 'bg-orange-100 text-orange-800 border-orange-300',
 Diproses: 'bg-blue-100 text-blue-800 border-blue-300',
 Dikemas: 'bg-purple-100 text-purple-800 border-purple-300',
 Dikirim: 'bg-indigo-100 text-indigo-800 border-indigo-300',
@@ -1856,6 +2126,7 @@ function renderAdminOrdersTab() {
 const statuses = [
 'ALL',
 'Menunggu Pembayaran',
+'Menunggu Konfirmasi',
 'Diproses',
 'Dikemas',
 'Dikirim',
@@ -1910,6 +2181,7 @@ class="px-3 py-1.5 rounded-xl bg-[#FFF5DF] border border-[#633D25]/20 text-xs fo
 >
 ${[
 'Menunggu Pembayaran',
+'Menunggu Konfirmasi',
 'Diproses',
 'Dikemas',
 'Dikirim',
@@ -2264,8 +2536,19 @@ ${renderAdminModals()}
 function renderApp() {
 const root = document.getElementById('appRoot');
 if (!root) return;
+const isOwnerVerified =
+window.SaleeDB && typeof window.SaleeDB.checkLocalAdminSession === 'function'
+? window.SaleeDB.checkLocalAdminSession()
+: false;
 if (state.viewMode === 'admin') {
+if (!isOwnerVerified) {
+state.viewMode = 'owner-login';
+root.innerHTML = renderOwnerLoginPage();
+} else {
 root.innerHTML = renderAdminFullView();
+}
+} else if (state.viewMode === 'owner-login') {
+root.innerHTML = renderOwnerLoginPage();
 } else {
 root.innerHTML = `
 <div class="min-h-screen flex flex-col bg-[#FFF5DF] text-[#633D25]">
@@ -2282,6 +2565,7 @@ ${renderProductDetailModal()}
 ${renderCartDrawer()}
 ${renderCheckoutModal()}
 ${renderOrderSuccessModal()}
+${renderCustomerOrderDetailModal()}
 ${renderAuthModal()}
 </div>
 `;
@@ -2352,13 +2636,30 @@ renderApp();
 openCheckout: openCheckoutModal,
 closeCheckout: function () {
 state.checkoutOpen = false;
+state.isSubmittingOrder = false;
 renderApp();
 },
+updateCheckoutField,
+copyBankAccount,
 submitCheckout: handleCheckoutSubmit,
 closeOrderSuccess: function () {
 state.orderSuccessData = null;
 renderApp();
 },
+openCustomerOrderDetail: function (orderId) {
+state.orderSuccessData = null;
+state.customerOrderDetailId = orderId;
+renderApp();
+},
+closeCustomerOrderDetail: function () {
+state.customerOrderDetailId = null;
+renderApp();
+},
+toggleOwnerPassword: function () {
+state.showOwnerPassword = !state.showOwnerPassword;
+renderApp();
+},
+navigateToRoute,
 submitContact: handleContactSubmit,
 openAuthModal: function () {
 state.authModalOpen = true;
@@ -2377,25 +2678,12 @@ renderApp();
 },
 logout: handleLogout,
 openAdmin: function () {
-const isVerified =
-window.SaleeDB && typeof window.SaleeDB.checkLocalAdminSession === 'function'
-? window.SaleeDB.checkLocalAdminSession()
-: false;
-if (!isVerified) {
-state.authMode = 'admin';
-state.authModalOpen = true;
-renderApp();
-showToast('Silakan login menggunakan akun Admin untuk mengakses Dashboard.', 'warning');
-return;
-}
-state.viewMode = 'admin';
+navigateToRoute('/admin');
 window.scrollTo({ top: 0, behavior: 'smooth' });
-renderApp();
 },
 switchToStore: function () {
-state.viewMode = 'store';
+navigateToRoute('/');
 window.scrollTo({ top: 0, behavior: 'smooth' });
-renderApp();
 },
 setAdminTab: function (tabId) {
 state.adminTab = tabId;
@@ -2524,7 +2812,10 @@ showToast('Data demo berhasil di-reset ke kondisi awal!');
 renderApp();
 },
 };
+window.addEventListener('popstate', function () {
+syncRouteFromLocation();
+});
 document.addEventListener('DOMContentLoaded', function () {
-renderApp();
+syncRouteFromLocation();
 });
 })();
