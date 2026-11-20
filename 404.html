@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mengalihkan — Keripik Pisang Salee</title>
+  <script>
+    (function () {
+      var path = window.location.pathname || '/';
+      if (/\/owner-login\/?$/i.test(path)) {
+        var base = path.replace(/\/owner-login\/?$/i, '') || '';
+        window.location.replace(base + '/#/owner-login');
+      } else if (/\/admin(\/.*)?$/i.test(path)) {
+        var baseAdmin = path.replace(/\/admin(\/.*)?$/i, '') || '';
+        window.location.replace(baseAdmin + '/#/admin');
+      } else {
+        window.location.replace('./');
+      }
+    })();
+  </script>
+</head>
+<body></body>
+</html>

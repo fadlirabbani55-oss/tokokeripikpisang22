@@ -195,10 +195,28 @@
         window.SaleeDB.saveAuthUser(state.currentUser);
         return saved !== false;
     }
+    function getBasePath() {
+        const pathname = (window.location && window.location.pathname) || '/';
+        const stripped = pathname
+            .replace(/\/(owner-login|admin)(\/.*)?$/i, '')
+            .replace(/\/index\.html$/i, '')
+            .replace(/\/+$/, '');
+        return stripped;
+    }
+    function buildFullRoutePath(routePath) {
+        const base = getBasePath();
+        if (!routePath || routePath === '/') return base ? `${base}/` : '/';
+        return `${base}${routePath.startsWith('/') ? routePath : '/' + routePath}`;
+    }
     function navigateToRoute(path) {
         try {
-            if (window.location.protocol.startsWith('http') && window.location.pathname !== path) {
-                window.history.pushState({}, '', path);
+            if (window.location.protocol.startsWith('http')) {
+                const targetPath = buildFullRoutePath(path);
+                if (window.location.pathname !== targetPath) {
+                    window.history.pushState({}, '', targetPath);
+                }
+            } else {
+                window.location.hash = path === '/' ? '' : `#${path}`;
             }
         } catch {
             // Ignore history pushState errors on file:// protocol
@@ -206,30 +224,33 @@
         syncRouteFromLocation(path);
     }
     function syncRouteFromLocation(explicitPath) {
-        const rawPath = explicitPath || (window.location && window.location.pathname) || '/';
+        const hashPath = (window.location && window.location.hash || '').replace(/^#/, '');
+        const rawPath = explicitPath || (hashPath.startsWith('/') ? hashPath : '') || (window.location && window.location.pathname) || '/';
         const cleanPath = rawPath.replace(/\/+$/, '') || '/';
+        const isAdminPath = cleanPath === '/admin' || cleanPath.endsWith('/admin') || cleanPath.includes('/admin/');
+        const isOwnerLoginPath = cleanPath === '/owner-login' || cleanPath.endsWith('/owner-login');
         const isOwnerVerified =
             window.SaleeDB && typeof window.SaleeDB.checkLocalAdminSession === 'function'
                 ? window.SaleeDB.checkLocalAdminSession()
                 : false;
 
-        if (cleanPath === '/admin' || cleanPath.startsWith('/admin/')) {
+        if (isAdminPath) {
             if (!isOwnerVerified) {
                 state.viewMode = 'owner-login';
                 try {
                     if (window.location.protocol.startsWith('http')) {
-                        window.history.replaceState({}, '', '/owner-login');
+                        window.history.replaceState({}, '', buildFullRoutePath('/owner-login'));
                     }
                 } catch { }
             } else {
                 state.viewMode = 'admin';
             }
-        } else if (cleanPath === '/owner-login') {
+        } else if (isOwnerLoginPath) {
             if (isOwnerVerified) {
                 state.viewMode = 'admin';
                 try {
                     if (window.location.protocol.startsWith('http')) {
-                        window.history.replaceState({}, '', '/admin');
+                        window.history.replaceState({}, '', buildFullRoutePath('/admin'));
                     }
                 } catch { }
             } else {
@@ -594,13 +615,11 @@
     }
     function openSkipOrSwitchToAdmin() {
         if (state.currentUser && state.currentUser.role === 'admin' && state.currentUser.localAdminVerified) {
-            state.viewMode = 'admin';
+            navigateToRoute('/admin');
             window.scrollTo({ top: 0, behavior: 'smooth' });
-            renderApp();
         } else {
-            state.authModalOpen = true;
-            state.authMode = 'admin';
-            renderApp();
+            navigateToRoute('/owner-login');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
         }
     }
     function loginAsDemoCustomer() {
@@ -2779,6 +2798,9 @@ ${renderAuthModal()}
         },
     };
     window.addEventListener('popstate', function () {
+        syncRouteFromLocation();
+    });
+    window.addEventListener('hashchange', function () {
         syncRouteFromLocation();
     });
     document.addEventListener('DOMContentLoaded', function () {
