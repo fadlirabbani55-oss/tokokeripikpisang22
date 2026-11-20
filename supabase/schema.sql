@@ -157,11 +157,40 @@ ALTER TABLE public.stock_movements ENABLE ROW LEVEL SECURITY;
 -- ============================================================================
 -- KONFIGURASI KEAMANAN OWNER ADMIN TUNGGAL & VERIFIKASI SUPABASE
 -- ============================================================================
+-- Tabel konfigurasi Owner (terproteksi RLS penuh, tidak bisa dibaca pelanggan/publik)
+CREATE TABLE IF NOT EXISTS public.owner_config (
+  id INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  owner_email TEXT NOT NULL,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE public.owner_config ENABLE ROW LEVEL SECURITY;
+
+-- Set email Owner default (dapat diubah kapan saja melalui SQL Editor Supabase)
+INSERT INTO public.owner_config (id, owner_email)
+VALUES (1, 'fadlirabbani55@gmail.com')
+ON CONFLICT (id) DO UPDATE
+SET owner_email = EXCLUDED.owner_email,
+    updated_at = NOW();
+
+-- Helper internal untuk mengambil email Owner secara aman (SECURITY DEFINER)
+CREATE OR REPLACE FUNCTION public.get_owner_email()
+RETURNS TEXT AS $$
+DECLARE
+  v_owner_email TEXT;
+BEGIN
+  SELECT LOWER(owner_email) INTO v_owner_email
+  FROM public.owner_config
+  WHERE id = 1;
+  RETURN COALESCE(v_owner_email, 'fadlirabbani55@gmail.com');
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
 -- Helper function untuk mengecek apakah user terautentikasi saat ini adalah Owner Admin
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
 DECLARE
   v_email TEXT;
+  v_owner TEXT;
 BEGIN
   SELECT LOWER(au.email)
   INTO v_email
@@ -172,12 +201,14 @@ BEGIN
     RETURN FALSE;
   END IF;
 
+  v_owner := public.get_owner_email();
+
   RETURN (
-    v_email = 'fadlirabbani55@gmail.com'
+    v_email = v_owner
     AND EXISTS (
       SELECT 1 FROM public.users u
       WHERE u.id = auth.uid()
-        AND LOWER(u.email) = 'fadlirabbani55@gmail.com'
+        AND LOWER(u.email) = v_owner
         AND u.role = 'admin'
     )
   );
@@ -198,7 +229,7 @@ GRANT EXECUTE ON FUNCTION public.verify_owner_admin() TO authenticated;
 CREATE OR REPLACE FUNCTION public.enforce_single_owner_admin()
 RETURNS TRIGGER AS $$
 BEGIN
-  IF LOWER(NEW.email) = 'fadlirabbani55@gmail.com' THEN
+  IF LOWER(NEW.email) = public.get_owner_email() THEN
     NEW.role := 'admin';
   ELSE
     NEW.role := 'customer';
@@ -224,14 +255,14 @@ BEGIN
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'full_name', split_part(NEW.email, '@', 1)),
     CASE
-      WHEN LOWER(NEW.email) = 'fadlirabbani55@gmail.com' THEN 'admin'
+      WHEN LOWER(NEW.email) = public.get_owner_email() THEN 'admin'
       ELSE 'customer'
     END
   )
   ON CONFLICT (id) DO UPDATE
   SET email = EXCLUDED.email,
       role = CASE
-        WHEN LOWER(EXCLUDED.email) = 'fadlirabbani55@gmail.com' THEN 'admin'
+        WHEN LOWER(EXCLUDED.email) = public.get_owner_email() THEN 'admin'
         ELSE 'customer'
       END,
       updated_at = NOW();
