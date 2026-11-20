@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="id" class="scroll-smooth">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -44,6 +45,7 @@
       background-color: #FFF5DF;
       color: #633D25;
     }
+
     h1,
     h2,
     h3,
@@ -51,29 +53,36 @@
     .font-display {
       font-family: 'Poppins', 'Plus Jakarta Sans', sans-serif;
     }
+
     ::-webkit-scrollbar {
       width: 8px;
       height: 8px;
     }
+
     ::-webkit-scrollbar-track {
       background: #FFF5DF;
     }
+
     ::-webkit-scrollbar-thumb {
       background: #633D25;
       border-radius: 9999px;
     }
+
     ::-webkit-scrollbar-thumb:hover {
       background: #557447;
     }
   </style>
 </head>
+
 <body class="min-h-screen antialiased selection:bg-[#F5C84C] selection:text-[#633D25]">
   <!-- Container Notifikasi Toast -->
   <div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2.5 pointer-events-none"></div>
   <!-- Root Aplikasi Interaktif (Storefront Pelanggan & Dashboard Admin) -->
   <div id="appRoot"></div>
-  <!-- Modul Database Relasional (8 Tabel) & Aplikasi Utama -->
+  <!-- Modul Konfigurasi Admin Lokal, Database Relasional (8 Tabel) & Aplikasi Utama -->
+  <script src="./src/config/adminAuthConfig.js"></script>
   <script src="./src/runtime/database.js"></script>
   <script src="./src/runtime/app.js"></script>
 </body>
+
 </html>

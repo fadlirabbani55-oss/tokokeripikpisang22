@@ -32,11 +32,16 @@ const indexDest = path.join(distDir, 'index.html');
 fs.copyFileSync(indexSrc, indexDest);
 console.log('✓ Copied index.html -> dist/index.html');
 
-// 3. Copy src/runtime/* to dist/src/runtime/*
+// 3. Copy src/runtime/* and src/config/* to dist/src/*
 const runtimeSrc = path.join(rootDir, 'src', 'runtime');
 const runtimeDest = path.join(distDir, 'src', 'runtime');
 copyDirRecursive(runtimeSrc, runtimeDest);
 console.log('✓ Copied src/runtime/* -> dist/src/runtime/*');
+
+const configSrc = path.join(rootDir, 'src', 'config');
+const configDest = path.join(distDir, 'src', 'config');
+copyDirRecursive(configSrc, configDest);
+console.log('✓ Copied src/config/* -> dist/src/config/*');
 
 // 4. Copy assets/images/* to dist/assets/images/* and dist/images/*
 const assetsSrc = path.join(rootDir, 'assets');

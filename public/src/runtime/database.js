@@ -770,6 +770,68 @@
       console.warn('Supabase signOut warning:', err);
     }
   }
+  async function verifyLocalAdminLogin(email, password) {
+    const inputEmail = String(email || '').trim().toLowerCase();
+    const inputPassword = String(password || '');
+
+    if (!inputEmail || !inputPassword) {
+      return { ok: false, error: 'Masukkan email dan password Admin.' };
+    }
+
+    // 1. Coba validasi melalui backend endpoint (/api/admin-login) jika tersedia
+    try {
+      if (window.location && window.location.protocol.startsWith('http')) {
+        const resp = await fetch('/api/admin-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: inputEmail, password: inputPassword }),
+        });
+        if (resp.status === 200) {
+          const data = await resp.json();
+          if (data && data.ok && data.user) {
+            return { ok: true, user: data.user };
+          }
+        } else if (resp.status === 401) {
+          const errData = await resp.json().catch(() => ({}));
+          return { ok: false, error: errData.error || 'Email atau password Admin salah.' };
+        }
+      }
+    } catch {
+      // Fallback ke autentikasi lokal sementara jika backend tidak berjalan
+    }
+
+    // 2. Fallback autentikasi lokal sementara (untuk pengujian langsung di browser)
+    const cfg = window.SALEE_ADMIN_CONFIG || {};
+    const expectedEmail = String(cfg.EMAIL_ADMIN || '').trim().toLowerCase();
+    const expectedPassword = String(cfg.PASSWORD_ADMIN || '');
+
+    if (!expectedEmail || !expectedPassword) {
+      return {
+        ok: false,
+        error: 'Konfigurasi EMAIL_ADMIN / PASSWORD_ADMIN belum diatur.',
+      };
+    }
+
+    if (inputEmail === expectedEmail && inputPassword === expectedPassword) {
+      return {
+        ok: true,
+        user: {
+          id: 'usr-admin-owner',
+          email: expectedEmail,
+          full_name: cfg.ADMIN_NAME || 'Owner Keripik Pisang Salee',
+          phone: '',
+          role: 'admin',
+          localAdminVerified: true,
+        },
+      };
+    }
+
+    return { ok: false, error: 'Email atau password Admin salah.' };
+  }
+  function checkLocalAdminSession() {
+    const u = loadAuthUser();
+    return Boolean(u && u.role === 'admin' && u.localAdminVerified === true);
+  }
   window.SaleeDB = {
     STORAGE_KEY,
     DEFAULT_SUPABASE_URL,
@@ -787,6 +849,8 @@
     verifyOwnerAdminViaSupabase,
     checkCurrentAdminSession,
     signOutSupabase,
+    verifyLocalAdminLogin,
+    checkLocalAdminSession,
     resetToSeed: function () {
       const fresh = cloneSeed();
       saveDB(fresh);

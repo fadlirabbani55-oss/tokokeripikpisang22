@@ -404,7 +404,7 @@ showToast(
 }
 }
 function openSkipOrSwitchToAdmin() {
-if (state.currentUser && state.currentUser.role === 'admin' && state.currentUser.supabaseVerified) {
+if (state.currentUser && state.currentUser.role === 'admin' && state.currentUser.localAdminVerified) {
 state.viewMode = 'admin';
 window.scrollTo({ top: 0, behavior: 'smooth' });
 renderApp();
@@ -467,26 +467,22 @@ if (!email || !password) {
 showToast('Masukkan email dan password akun Admin.', 'error');
 return;
 }
-showToast('Memverifikasi hak akses Admin melalui Supabase...');
-const res = await window.SaleeDB.verifyOwnerAdminViaSupabase(email, password);
+const res = await window.SaleeDB.verifyLocalAdminLogin(email, password);
 if (!res || !res.ok) {
-showToast((res && res.error) || 'Akses Admin ditolak oleh Supabase.', 'error');
+showToast((res && res.error) || 'Email atau password Admin salah.', 'error');
 return;
 }
 state.currentUser = res.user;
 state.authModalOpen = false;
 state.viewMode = 'admin';
 persistAll();
-showToast(`Verifikasi Supabase berhasil! Selamat datang, ${res.user.full_name}.`);
+showToast(`Login berhasil! Selamat datang, ${res.user.full_name}.`);
 window.scrollTo({ top: 0, behavior: 'smooth' });
 renderApp();
 }
 function handleLogout() {
 state.currentUser = null;
 state.viewMode = 'store';
-if (window.SaleeDB && typeof window.SaleeDB.signOutSupabase === 'function') {
-window.SaleeDB.signOutSupabase();
-}
 persistAll();
 showToast('Anda telah keluar dari sesi akun.', 'info');
 renderApp();
@@ -1443,7 +1439,7 @@ function renderAuthModal() {
 if (!state.authModalOpen) return '';
 const isAdminTab = state.authMode === 'admin';
 return `
-<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"><div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border-2 border-[#633D25]/15"><div class="px-6 py-4 bg-[#633D25] text-white flex items-center justify-between"><div class="flex items-center gap-2"><i data-lucide="lock" class="w-5 h-5 text-[#F5C84C]"></i><h3 class="font-display font-extrabold text-lg">${isAdminTab ? 'Login Admin (Verifikasi Supabase)' : 'Masuk / Daftar Pelanggan'}</h3></div><button
+<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"><div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl border-2 border-[#633D25]/15"><div class="px-6 py-4 bg-[#633D25] text-white flex items-center justify-between"><div class="flex items-center gap-2"><i data-lucide="lock" class="w-5 h-5 text-[#F5C84C]"></i><h3 class="font-display font-extrabold text-lg">${isAdminTab ? 'Login Owner / Admin' : 'Masuk / Daftar Pelanggan'}</h3></div><button
 type="button"
 onclick="window.SaleeApp.closeAuthModal()"
 class="p-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white cursor-pointer"
@@ -1459,7 +1455,7 @@ class="py-2 rounded-xl text-xs font-extrabold transition cursor-pointer ${isAdmi
 ${
 isAdminTab
 ? `
-<form onsubmit="window.SaleeApp.submitAdminAuth(event)" class="space-y-3.5"><div class="p-3.5 rounded-2xl bg-[#FFF5DF] border border-[#F5C84C] text-xs text-[#633D25] font-medium">Akses Dashboard Admin hanya tersedia untuk akun Owner resmi dan diverifikasi langsung melalui <strong>Supabase Auth</strong>.</div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Email Akun *</label><input
+<form onsubmit="window.SaleeApp.submitAdminAuth(event)" class="space-y-3.5"><div class="p-3.5 rounded-2xl bg-[#FFF5DF] border border-[#F5C84C] text-xs text-[#633D25] font-medium">Akses Dashboard Admin hanya tersedia untuk akun <strong>Owner / Admin</strong> yang terdaftar.</div><div><label class="block text-xs font-extrabold text-[#633D25] mb-1">Email Akun *</label><input
 type="email"
 name="email"
 required
@@ -2380,16 +2376,16 @@ state.authMode = mode;
 renderApp();
 },
 logout: handleLogout,
-openAdmin: async function () {
+openAdmin: function () {
 const isVerified =
-window.SaleeDB && typeof window.SaleeDB.checkCurrentAdminSession === 'function'
-? await window.SaleeDB.checkCurrentAdminSession()
+window.SaleeDB && typeof window.SaleeDB.checkLocalAdminSession === 'function'
+? window.SaleeDB.checkLocalAdminSession()
 : false;
 if (!isVerified) {
 state.authMode = 'admin';
 state.authModalOpen = true;
 renderApp();
-showToast('Silakan login dengan akun Owner terverifikasi Supabase untuk membuka Dashboard Admin.', 'warning');
+showToast('Silakan login menggunakan akun Admin untuk mengakses Dashboard.', 'warning');
 return;
 }
 state.viewMode = 'admin';
